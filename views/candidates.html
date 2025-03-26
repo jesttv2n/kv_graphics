@@ -1,0 +1,542 @@
+<!DOCTYPE html>
+<html lang="da">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Valgte Kandidater</title>
+    <link rel="stylesheet" href="../css/visualizations.css" />
+    <style>
+      body {
+        overflow: hidden;
+        background-color: #00407a;
+      }
+
+      /* Additional candidates-specific styles */
+      .kandidat-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+        gap: 25px;
+        padding: 10px;
+        overflow-y: auto;
+        max-height: calc(100vh - 230px);
+      }
+
+      .parti-container {
+        background-color: rgba(0, 0, 0, 0.3);
+        border-radius: 10px;
+        overflow: hidden;
+        animation: fadeIn 0.5s ease-out forwards;
+        opacity: 0;
+      }
+
+      .parti-header {
+        display: flex;
+        align-items: center;
+        padding: 15px;
+        background-color: rgba(0, 0, 0, 0.2);
+      }
+
+      .parti-letter {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        margin-right: 15px;
+        font-size: 24px;
+        font-weight: bold;
+      }
+
+      .parti-name {
+        font-size: 24px;
+        font-weight: bold;
+        flex: 1;
+      }
+
+      .parti-seats {
+        font-size: 20px;
+        background-color: rgba(255, 255, 255, 0.1);
+        padding: 5px 10px;
+        border-radius: 5px;
+      }
+
+      .kandidater-liste {
+        padding: 0 15px 15px 15px;
+      }
+
+      .kandidat-card {
+        display: flex;
+        align-items: center;
+        background-color: rgba(255, 255, 255, 0.1);
+        margin-bottom: 10px;
+        border-radius: 8px;
+        padding: 10px;
+        transition: all 0.3s ease;
+      }
+
+      .kandidat-card:hover {
+        background-color: rgba(255, 255, 255, 0.15);
+      }
+
+      .kandidat-photo {
+        width: 60px;
+        height: 60px;
+        border-radius: 50%;
+        margin-right: 15px;
+        background-size: cover;
+        background-position: center;
+        background-color: #333;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        font-size: 24px;
+        color: #ddd;
+        border: 2px solid white;
+      }
+
+      .kandidat-info {
+        flex: 1;
+      }
+
+      .kandidat-name {
+        font-size: 18px;
+        font-weight: bold;
+        margin-bottom: 3px;
+      }
+
+      .kandidat-details {
+        font-size: 14px;
+        opacity: 0.8;
+      }
+
+      .kandidat-votes {
+        font-weight: bold;
+        background-color: rgba(255, 255, 255, 0.2);
+        padding: 5px 10px;
+        border-radius: 5px;
+        margin-left: 10px;
+      }
+
+      .borgmester-indicator {
+        position: absolute;
+        top: -10px;
+        right: 10px;
+        background-color: gold;
+        color: black;
+        padding: 3px 8px;
+        border-radius: 10px;
+        font-size: 12px;
+        font-weight: bold;
+        z-index: 2;
+      }
+
+      .borgmester-card {
+        position: relative;
+        border: 2px solid gold;
+        background-color: rgba(255, 215, 0, 0.1);
+      }
+
+      @keyframes fadeIn {
+        from {
+          opacity: 0;
+          transform: translateY(20px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <!-- CasparCG metadata (ikke synligt) -->
+    <div id="meta" class="meta"></div>
+
+    <!-- Video baggrund -->
+    <div class="video-background">
+      <div class="video-overlay"></div>
+      <video autoplay muted loop playsinline>
+        <source
+          src="../assets/backgrounds/290922_fv_loop_v1.mp4"
+          type="video/mp4"
+        />
+      </video>
+    </div>
+
+    <div class="visualization-container">
+      <div id="loadingScreen" class="loading">
+        <div class="spinner">⟳</div>
+        Indlæser kandidatdata...
+      </div>
+
+      <div class="visualization-header">
+        <div class="header-left">
+          <div class="title-box"><h1>KV21</h1></div>
+          <h2>Valgte Kandidater</h2>
+        </div>
+        <div class="header-right">
+          <h2 id="kommuneNavn">Kommune</h2>
+          <span id="optaltIndikator" class="optalt-indikator fuldt"
+            >100% optalt</span
+          >
+        </div>
+      </div>
+
+      <div class="visualization-content">
+        <div class="info-box">
+          <div id="mandatInfo" class="subtitle">31 pladser i byrådet</div>
+          <div id="kandidatInfo" class="subtitle">31 valgte kandidater</div>
+        </div>
+
+        <div id="kandidatGrid" class="kandidat-grid">
+          <!-- Valgte kandidater indsættes her -->
+        </div>
+      </div>
+
+      <div class="visualization-footer">
+        <div>Kommunalvalg 2021</div>
+        <div>
+          <div id="opdateretTid" class="opdateret">
+            Sidst opdateret: --:--:--
+          </div>
+          <div id="nedtaelling" class="nedtaelling">
+            <svg
+              class="update-icon"
+              viewBox="0 0 24 24"
+              fill="currentColor"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="M17.65 6.35C16.2 4.9 14.21 4 12 4C7.58 4 4 7.58 4 12C4 16.42 7.58 20 12 20C15.73 20 18.84 17.45 19.73 14H17.65C16.83 16.33 14.61 18 12 18C8.69 18 6 15.31 6 12C6 8.69 8.69 6 12 6C13.66 6 15.14 6.69 16.22 7.78L13 11H20V4L17.65 6.35Z"
+              />
+            </svg>
+            Opdaterer om: 30 sek
+          </div>
+        </div>
+      </div>
+
+      <!-- Visuelle effekter for overgange -->
+      <div id="fadeOverlay" class="fade-overlay"></div>
+      <div id="updateFlash" class="update-flash"></div>
+      <div id="transitionOverlay" class="transition-overlay">
+        <div id="transitionContent" class="transition-content"></div>
+      </div>
+    </div>
+
+    <script src="../js/utils/common.js"></script>
+    <script src="../js/utils/party-colors.js"></script>
+    <script>
+      // Configuration
+      let settings = {
+        highlightMayor: true,
+        showPartyLogos: true,
+        showVoteCounts: true,
+        candidateSorting: "votes", // 'votes', 'party', 'name'
+      };
+
+      // Application state
+      const state = {
+        kommuneId: null,
+        kommuneData: null,
+        kandidatData: null,
+        mayorId: null,
+      };
+
+      /**
+       * Initialize the visualization
+       */
+      function initialize() {
+        // Get kommune ID from URL parameter
+        state.kommuneId = getUrlParam("kommune");
+
+        // Load stored settings
+        loadSettings();
+
+        // Listen for messages from parent
+        setupMessageListener();
+
+        // If we have a kommune ID, load data
+        if (state.kommuneId) {
+          fetchData();
+        } else {
+          // Hide loading screen if no kommune is selected
+          el("loadingScreen").style.display = "none";
+          el("kommuneNavn").textContent = "Vælg kommune";
+        }
+      }
+
+      /**
+       * Load settings from localStorage
+       */
+      function loadSettings() {
+        const storedSettings = localStorage.getItem("candidatesSettings");
+        if (storedSettings) {
+          try {
+            const parsed = JSON.parse(storedSettings);
+            settings = { ...settings, ...parsed };
+          } catch (e) {
+            console.error("Failed to parse settings", e);
+          }
+        }
+      }
+
+      /**
+       * Listen for messages from parent window
+       */
+      function setupMessageListener() {
+        window.addEventListener("message", function (event) {
+          // Check event source for security
+          // if (event.origin !== window.location.origin) return;
+
+          const { action, payload, settings: newSettings } = event.data;
+
+          if (action === "opdaterData" && payload) {
+            // Determine if this is kommuneData or kandidatData
+            if (payload.elected) {
+              state.kandidatData = payload;
+            } else if (payload.result) {
+              state.kommuneData = payload;
+            }
+
+            renderData();
+          } else if (action === "updateSettings" && newSettings) {
+            settings = { ...settings, ...newSettings };
+            if (state.kandidatData) {
+              renderData();
+            }
+          }
+        });
+      }
+
+      /**
+       * Fetch data from APIs
+       */
+      async function fetchData() {
+        try {
+          el("loadingScreen").style.display = "flex";
+
+          const cacheKey = Date.now();
+
+          // Fetch both kommune data and kandidat data
+          const kommuneUrl = `https://election-api.services.tv2.dk/kv/kv21/results/${state.kommuneId}?_cb=${cacheKey}`;
+          const kandidatUrl = `https://election-api.services.tv2.dk/kv/kv21/areastatus/${state.kommuneId}?_cb=${cacheKey}`;
+
+          // Fetch data in parallel
+          const [kommuneResponse, kandidatResponse] = await Promise.all([
+            fetch(kommuneUrl),
+            fetch(kandidatUrl),
+          ]);
+
+          if (!kommuneResponse.ok) {
+            throw new Error(`Kommune API error: ${kommuneResponse.status}`);
+          }
+
+          if (!kandidatResponse.ok) {
+            throw new Error(`Kandidat API error: ${kandidatResponse.status}`);
+          }
+
+          state.kommuneData = await kommuneResponse.json();
+          state.kandidatData = await kandidatResponse.json();
+
+          renderData();
+        } catch (error) {
+          console.error("Error fetching data:", error);
+          el("kommuneNavn").textContent = "DATAFEJL";
+          el("loadingScreen").innerHTML = `
+                    <div class="spinner">⟳</div>
+                    Fejl ved hentning af data: ${error.message}<br>
+                    Prøver igen om få sekunder...
+                `;
+        }
+      }
+
+      /**
+       * Render data to DOM
+       */
+      function renderData() {
+        // We need at least kandidat data
+        if (!state.kandidatData) {
+          return;
+        }
+
+        // Extract data
+        const kandidatData = state.kandidatData;
+        const kommuneData = state.kommuneData || {};
+
+        // Set kommune name
+        el("kommuneNavn").textContent =
+          kommuneData.result?.name || kandidatData.name || "Ukendt kommune";
+
+        // Set mandater
+        const mandater =
+          kommuneData.result?.seats || kandidatData.councilSeats || 31;
+        el("mandatInfo").textContent = `${mandater} pladser i byrådet`;
+
+        // Find mayor if exists
+        const mayor = kandidatData.mayor || {};
+        state.mayorId = mayor.externalId || null;
+
+        // Get elected candidates
+        const elected = kandidatData.elected || [];
+
+        // Count total candidates
+        const totalCandidates = elected.reduce(
+          (total, party) => total + (party.candidates?.length || 0),
+          0
+        );
+        el("kandidatInfo").textContent = `${totalCandidates} valgte kandidater`;
+
+        // Render candidates
+        renderCandidates(elected);
+
+        // Update timestamp
+        if (kandidatData.lastUpdated) {
+          const dato = new Date(kandidatData.lastUpdated);
+          el(
+            "opdateretTid"
+          ).textContent = `Sidst opdateret: ${dato.toLocaleTimeString(
+            "da-DK"
+          )}`;
+        }
+
+        // Hide loading screen
+        el("loadingScreen").style.display = "none";
+      }
+
+      /**
+       * Render candidates
+       * @param {Array} electedParties - List of parties with elected candidates
+       */
+      function renderCandidates(electedParties) {
+        const container = el("kandidatGrid");
+        container.innerHTML = "";
+
+        // Sort parties based on number of mandates (descending)
+        const sortedParties = [...electedParties].sort((a, b) => {
+          return (b.candidates?.length || 0) - (a.candidates?.length || 0);
+        });
+
+        // Render each party and its candidates
+        sortedParties.forEach((party, partyIndex) => {
+          // Skip if no candidates
+          if (!party.candidates || party.candidates.length === 0) return;
+
+          // Get party details
+          const letter = (
+            party.letter ||
+            party.candidates[0]?.partyLetter ||
+            ""
+          ).toUpperCase();
+          const name =
+            party.name || party.candidates[0]?.partyName || "Ukendt parti";
+          const color = farve(letter);
+          const seats = party.candidates.length;
+
+          // Create party container
+          const partyContainer = document.createElement("div");
+          partyContainer.className = "parti-container";
+          partyContainer.style.animationDelay = `${partyIndex * 150}ms`;
+
+          // Create party header
+          const partyHeader = document.createElement("div");
+          partyHeader.className = "parti-header";
+          partyHeader.innerHTML = `
+                    <div class="parti-letter" style="background-color: ${color}">${letter}</div>
+                    <div class="parti-name">${name}</div>
+                    <div class="parti-seats">${seats} ${
+            seats === 1 ? "mandat" : "mandater"
+          }</div>
+                `;
+          partyContainer.appendChild(partyHeader);
+
+          // Create candidates list
+          const kandidaterListe = document.createElement("div");
+          kandidaterListe.className = "kandidater-liste";
+
+          // Sort candidates based on settings
+          let sortedCandidates = [...party.candidates];
+
+          if (settings.candidateSorting === "votes") {
+            sortedCandidates.sort((a, b) => (b.votes || 0) - (a.votes || 0));
+          } else if (settings.candidateSorting === "name") {
+            sortedCandidates.sort((a, b) => a.name?.localeCompare(b.name) || 0);
+          }
+
+          // Render each candidate
+          sortedCandidates.forEach((candidate, candidateIndex) => {
+            // Create candidate card
+            const cardEl = document.createElement("div");
+            cardEl.className = "kandidat-card";
+
+            // Check if this candidate is the mayor
+            const isMayor =
+              state.mayorId && candidate.externalId === state.mayorId;
+
+            if (isMayor && settings.highlightMayor) {
+              cardEl.classList.add("borgmester-card");
+
+              // Add mayor indicator
+              const mayorIndicator = document.createElement("div");
+              mayorIndicator.className = "borgmester-indicator";
+              mayorIndicator.textContent = "Borgmester";
+              cardEl.appendChild(mayorIndicator);
+            }
+
+            // Process candidate photo
+            let photoUrl = "";
+            if (candidate.imageURL || candidate.imageUrl) {
+              const imageUrlString = candidate.imageURL || candidate.imageUrl;
+              const firstUrl = imageUrlString.split(",")[0].trim();
+
+              if (firstUrl.includes("?")) {
+                photoUrl = firstUrl.split(" ")[0].trim();
+              } else {
+                photoUrl = firstUrl;
+              }
+            }
+
+            // Get initials for placeholder
+            const initials = candidate.name
+              ? candidate.name
+                  .split(" ")
+                  .map((n) => n[0])
+                  .join("")
+                  .substring(0, 2)
+              : "?";
+
+            // Create HTML content
+            cardEl.innerHTML = `
+                        <div class="kandidat-photo" style="${
+                          photoUrl ? `background-image: url('${photoUrl}')` : ""
+                        }">${!photoUrl ? initials : ""}</div>
+                        <div class="kandidat-info">
+                            <div class="kandidat-name">${
+                              candidate.name || "Ukendt"
+                            }</div>
+                            <div class="kandidat-details">${
+                              candidate.age ? `${candidate.age} år` : ""
+                            }</div>
+                        </div>
+                        ${
+                          settings.showVoteCounts
+                            ? `<div class="kandidat-votes">${formatNumber(
+                                candidate.votes || 0
+                              )}</div>`
+                            : ""
+                        }
+                    `;
+
+            kandidaterListe.appendChild(cardEl);
+          });
+
+          partyContainer.appendChild(kandidaterListe);
+          container.appendChild(partyContainer);
+        });
+      }
+
+      // Initialize when DOM is loaded
+      document.addEventListener("DOMContentLoaded", initialize);
+    </script>
+  </body>
+</html>

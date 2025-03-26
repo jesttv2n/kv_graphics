@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="da">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Valgresultater</title>
+    <link rel="stylesheet" href="../css/visualizations.css" />
+    <style>
+      body {
+        overflow: hidden;
+        background-color: #00407a;
+      }
+
+      /* Extra styles specific to results */
+      .party-bar-container {
+        position: relative;
+        height: 50px;
+        margin-bottom: 15px;
+        background-color: rgba(255, 255, 255, 0.1);
+        border-radius: 5px;
+        overflow: hidden;
+      }
+
+      .party-bar {
+        position: absolute;
+        top: 0;
+        left: 0;
+        height: 100%;
+        background-color: #0085c7;
+        transition: width 1s ease-out;
+      }
+
+      .party-content {
+        position: relative;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0 15px;
+        height: 100%;
+        z-index: 2;
+      }
+
+      .party-label {
+        display: flex;
+        align-items: center;
+        font-size: 22px;
+        font-weight: bold;
+      }
+
+      .party-letter {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        margin-right: 15px;
+        font-weight: bold;
+        background-color: #555;
+      }
+
+      .party-values {
+        display: flex;
+        align-items: center;
+        gap: 30px;
+      }
+
+      .party-percentage,
+      .party-seats {
+        font-size: 22px;
+        font-weight: bold;
+        min-width: 100px;
+        text-align: center;
+      }
+
+      .party-change {
+        min-width: 70px;
+        text-align: center;
+      }
+
+      .change-positive {
+        color: #1eaa5c;
+      }
+
+      .change-negative {
+        color: #d9534f;
+      }
+
+      .change-neutral {
+        color: #999;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- CasparCG metadata (ikke synligt) -->
+    <div id="meta" class="meta"></div>
+
+    <!-- Video baggrund -->
+    <div class="video-background">
+      <div class="video-overlay"></div>
+      <video autoplay muted loop playsinline>
+        <source
+          src="../assets/backgrounds/290922_fv_loop_v1.mp4"
+          type="video/mp4"
+        />
+      </video>
+    </div>
+
+    <div class="visualization-container">
+      <div id="loadingScreen" class="loading">
+        <div class="spinner">⟳</div>
+        Indlæser valgdata...
+      </div>
+
+      <div class="visualization-header">
+        <div class="header-left">
+          <div class="title-box"><h1>KV21</h1></div>
+          <h2>Kommunalvalg 2021</h2>
+        </div>
+        <div class="header-right">
+          <h2 id="kommuneNavn">Kommune</h2>
+          <span id="optaltIndikator" class="optalt-indikator delvist"
+            >50% optalt</span
+          >
+        </div>
+      </div>
+
+      <div class="visualization-content">
+        <div class="info-box">
+          <div id="valgdeltagelse" class="subtitle">Valgdeltagelse: 0.0%</div>
+          <div id="optaelling" class="subtitle">Optællingstatus: 0%</div>
+        </div>
+
+        <div id="partyList" class="party-results">
+          <!-- Parti resultater bliver indsat her -->
+        </div>
+      </div>
+
+      <div class="visualization-footer">
+        <div id="mandatInfo">31 mandater i alt</div>
+        <div>
+          <div id="opdateretTid" class="opdateret">
+            Sidst opdateret: --:--:--
+          </div>
+          <div id="nedtaelling" class="nedtaelling">
+            <svg
+              class="update-icon"
+              viewBox="0 0 24 24"
+              fill="currentColor"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="M17.65 6.35C16.2 4.9 14.21 4 12 4C7.58 4 4 7.58 4 12C4 16.42 7.58 20 12 20C15.73 20 18.84 17.45 19.73 14H17.65C16.83 16.33 14.61 18 12 18C8.69 18 6 15.31 6 12C6 8.69 8.69 6 12 6C13.66 6 15.14 6.69 16.22 7.78L13 11H20V4L17.65 6.35Z"
+              />
+            </svg>
+            Opdaterer om: 30 sek
+          </div>
+        </div>
+      </div>
+
+      <!-- Visuelle effekter for overgange -->
+      <div id="fadeOverlay" class="fade-overlay"></div>
+      <div id="updateFlash" class="update-flash"></div>
+      <div id="transitionOverlay" class="transition-overlay">
+        <div id="transitionContent" class="transition-content"></div>
+      </div>
+    </div>
+
+    <script src="../js/utils/common.js"></script>
+    <script src="../js/utils/party-colors.js"></script>
+    <script>
+      // Configuration
+      let settings = {
+        showDifference: true,
+        sortByVotes: true,
+        partyLimit: 10,
+      };
+
+      // Application state
+      const state = {
+        data: null,
+        kommuneId: null,
+        lastUpdateTimestamp: null,
+      };
+
+      /**
+       * Initialize the visualization
+       */
+      function initialize() {
+        // Get kommune ID from URL parameter
+        state.kommuneId = getUrlParam("kommune");
+
+        // Load stored settings
+        loadSettings();
+
+        // Listen for messages from parent
+        setupMessageListener();
+
+        // If we have a kommune ID, load data
+        if (state.kommuneId) {
+          fetchData();
+        } else {
+          // Hide loading screen if no kommune is selected
+          el("loadingScreen").style.display = "none";
+          el("kommuneNavn").textContent = "Vælg kommune";
+        }
+      }
+
+      /**
+       * Load settings from localStorage
+       */
+      function loadSettings() {
+        const storedSettings = localStorage.getItem("resultsSettings");
+        if (storedSettings) {
+          try {
+            const parsed = JSON.parse(storedSettings);
+            settings = { ...settings, ...parsed };
+          } catch (e) {
+            console.error("Failed to parse settings", e);
+          }
+        }
+      }
+
+      /**
+       * Listen for messages from parent window
+       */
+      function setupMessageListener() {
+        window.addEventListener("message", function (event) {
+          // Check event source for security
+          // if (event.origin !== window.location.origin) return;
+
+          const { action, payload, settings: newSettings } = event.data;
+
+          if (action === "opdaterData" && payload) {
+            state.data = payload;
+            renderData();
+          } else if (action === "updateSettings" && newSettings) {
+            settings = { ...settings, ...newSettings };
+            if (state.data) {
+              renderData();
+            }
+          }
+        });
+      }
+
+      /**
+       * Fetch data from API
+       */
+      async function fetchData() {
+        try {
+          el("loadingScreen").style.display = "flex";
+
+          const cacheKey = Date.now();
+          const url = `https://election-api.services.tv2.dk/kv/kv21/results/${state.kommuneId}?_cb=${cacheKey}`;
+
+          const response = await fetch(url);
+          if (!response.ok) {
+            throw new Error(
+              `Server returned ${response.status}: ${response.statusText}`
+            );
+          }
+
+          const data = await response.json();
+          state.data = data;
+
+          renderData();
+        } catch (error) {
+          console.error("Error fetching data:", error);
+          el("kommuneNavn").textContent = "DATAFEJL";
+          el("loadingScreen").innerHTML = `
+                    <div class="spinner">⟳</div>
+                    Fejl ved hentning af data: ${error.message}<br>
+                    Prøver igen om få sekunder...
+                `;
+        }
+      }
+
+      /**
+       * Render data to DOM
+       */
+      function renderData() {
+        if (!state.data || !state.data.result) {
+          return;
+        }
+
+        const data = state.data;
+        const resultData = data.result;
+
+        // Update kommune name
+        el("kommuneNavn").textContent = resultData.name || "Ukendt kommune";
+
+        // Update election progress
+        const pct = resultData.electionProgress || 0;
+        el("optaltIndikator").textContent = `${pct}% optalt`;
+        el("optaltIndikator").className = "optalt-indikator";
+
+        if (pct >= 95) {
+          el("optaltIndikator").classList.add("fuldt");
+        } else if (pct >= 50) {
+          el("optaltIndikator").classList.add("delvist");
+        } else {
+          el("optaltIndikator").classList.add("minimalt");
+        }
+
+        // Update other indicators
+        el("optaelling").textContent = `Optællingstatus: ${pct}%`;
+        el("valgdeltagelse").textContent = resultData.votesPercentage
+          ? `Valgdeltagelse: ${resultData.votesPercentage.toFixed(1)}%`
+          : "Valgdeltagelse: Afventer";
+
+        // Update mandate info
+        const totalMandater =
+          resultData.totalSeats ||
+          (data.parties || []).reduce((sum, p) => sum + (p.seats || 0), 0);
+        el("mandatInfo").textContent = `${totalMandater} mandater i alt`;
+
+        // Update party list
+        renderPartyList(data.parties || []);
+
+        // Update timestamp
+        if (data.lastUpdated) {
+          const dato = new Date(data.lastUpdated);
+          el(
+            "opdateretTid"
+          ).textContent = `Sidst opdateret: ${dato.toLocaleTimeString(
+            "da-DK"
+          )}`;
+          state.lastUpdateTimestamp = data.lastUpdated;
+        }
+
+        // Hide loading screen
+        el("loadingScreen").style.display = "none";
+      }
+
+      /**
+       * Render party list
+       * @param {Array} parties - List of parties
+       */
+      function renderPartyList(parties) {
+        // Get container
+        const partyList = el("partyList");
+        partyList.innerHTML = "";
+
+        // Sort parties based on settings
+        let sortedParties = [...parties];
+
+        if (settings.sortByVotes) {
+          sortedParties.sort((a, b) => b.votesPercentage - a.votesPercentage);
+        } else {
+          // Sort alphabetically by letter
+          sortedParties.sort((a, b) => {
+            const letterA = (a.letter || a.abbreviation || "").toUpperCase();
+            const letterB = (b.letter || b.abbreviation || "").toUpperCase();
+            return letterA.localeCompare(letterB);
+          });
+        }
+
+        // Limit number of parties if specified
+        if (settings.partyLimit > 0) {
+          sortedParties = sortedParties.slice(0, settings.partyLimit);
+        }
+
+        // Create elements for each party
+        sortedParties.forEach((party, index) => {
+          const letter = (
+            party.letter ||
+            party.abbreviation ||
+            ""
+          ).toUpperCase();
+          const name = party.name || "Ukendt";
+          const percentage =
+            typeof party.votesPercentage === "number"
+              ? party.votesPercentage.toFixed(1)
+              : "0.0";
+          const seats = typeof party.seats === "number" ? party.seats : 0;
+          const color = farve(letter);
+
+          // Create container
+          const partyContainer = document.createElement("div");
+          partyContainer.className = "party-bar-container";
+          partyContainer.style.animationDelay = `${index * 100}ms`;
+
+          // Create bar
+          const bar = document.createElement("div");
+          bar.className = "party-bar";
+          bar.style.backgroundColor = color;
+          bar.style.width = "0%";
+          partyContainer.appendChild(bar);
+
+          // Create content
+          const content = document.createElement("div");
+          content.className = "party-content";
+
+          // Party label (letter + name)
+          const label = document.createElement("div");
+          label.className = "party-label";
+          label.innerHTML = `
+                    <div class="party-letter" style="background-color: ${color}">${letter}</div>
+                    <div class="party-name">${name}</div>
+                `;
+          content.appendChild(label);
+
+          // Party values (percentage, change, seats)
+          const values = document.createElement("div");
+          values.className = "party-values";
+
+          // Percentage
+          const percentageEl = document.createElement("div");
+          percentageEl.className = "party-percentage";
+          percentageEl.textContent = `${percentage}%`;
+          values.appendChild(percentageEl);
+
+          // Change from previous election
+          if (
+            settings.showDifference &&
+            typeof party.votesPercentageChange === "number"
+          ) {
+            const change = party.votesPercentageChange;
+            const changeEl = document.createElement("div");
+            changeEl.className = "party-change";
+
+            // Determine class based on change
+            if (change > 0) {
+              changeEl.classList.add("change-positive");
+              changeEl.textContent = `+${change.toFixed(1)}`;
+            } else if (change < 0) {
+              changeEl.classList.add("change-negative");
+              changeEl.textContent = `${change.toFixed(1)}`;
+            } else {
+              changeEl.classList.add("change-neutral");
+              changeEl.textContent = "±0.0";
+            }
+
+            values.appendChild(changeEl);
+          }
+
+          // Seats
+          const seatsEl = document.createElement("div");
+          seatsEl.className = "party-seats";
+          seatsEl.textContent = `${seats} ${
+            seats === 1 ? "mandat" : "mandater"
+          }`;
+          values.appendChild(seatsEl);
+
+          content.appendChild(values);
+          partyContainer.appendChild(content);
+
+          // Add to DOM
+          partyList.appendChild(partyContainer);
+
+          // Animate bar width after a short delay
+          setTimeout(() => {
+            bar.style.width = `${Math.min(100, parseFloat(percentage) * 2)}%`;
+          }, 100 + index * 50);
+        });
+      }
+
+      // Initialize when DOM is loaded
+      document.addEventListener("DOMContentLoaded", initialize);
+    </script>
+  </body>
+</html>

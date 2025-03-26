@@ -1,0 +1,544 @@
+<!DOCTYPE html>
+<html lang="da">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Valgstedsresultater</title>
+    <link rel="stylesheet" href="../css/visualizations.css" />
+    <style>
+      body {
+        overflow: hidden;
+        background-color: #00407a;
+      }
+
+      /* Additional styles for polling stations */
+      .party-row {
+        display: flex;
+        align-items: center;
+        margin-bottom: 15px;
+        background-color: rgba(0, 0, 0, 0.3);
+        border-radius: 8px;
+        padding: 15px;
+        opacity: 0;
+        animation: fadeInUp 0.5s ease-out forwards;
+      }
+
+      .party-identity {
+        display: flex;
+        align-items: center;
+        width: 300px;
+      }
+
+      .party-letter {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        margin-right: 15px;
+        font-size: 22px;
+        font-weight: bold;
+      }
+
+      .party-name {
+        font-size: 20px;
+        font-weight: bold;
+      }
+
+      .party-stats {
+        display: flex;
+        flex: 1;
+        justify-content: space-between;
+        align-items: center;
+      }
+
+      .stat-container {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        min-width: 120px;
+      }
+
+      .stat-label {
+        font-size: 14px;
+        opacity: 0.8;
+        margin-bottom: 5px;
+      }
+
+      .stat-value {
+        font-size: 22px;
+        font-weight: bold;
+      }
+
+      .comparison-indicator {
+        display: flex;
+        align-items: center;
+        margin-left: 10px;
+        color: #777;
+        font-size: 14px;
+      }
+
+      .comparison-arrow {
+        margin-right: 5px;
+        font-size: 20px;
+      }
+
+      .higher {
+        color: #1eaa5c;
+      }
+
+      .lower {
+        color: #d9534f;
+      }
+
+      .same {
+        color: #999;
+      }
+
+      .votes-bar {
+        flex: 1;
+        height: 25px;
+        background-color: rgba(255, 255, 255, 0.1);
+        border-radius: 12px;
+        margin: 0 15px;
+        position: relative;
+        overflow: hidden;
+      }
+
+      .votes-progress {
+        height: 100%;
+        background-color: #0085c7;
+        width: 0;
+        transition: width 1s ease-out;
+        border-radius: 12px;
+      }
+
+      @keyframes fadeInUp {
+        from {
+          opacity: 0;
+          transform: translateY(10px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <!-- CasparCG metadata (ikke synligt) -->
+    <div id="meta" class="meta"></div>
+
+    <!-- Video baggrund -->
+    <div class="video-background">
+      <div class="video-overlay"></div>
+      <video autoplay muted loop playsinline>
+        <source
+          src="../assets/backgrounds/290922_fv_loop_v1.mp4"
+          type="video/mp4"
+        />
+      </video>
+    </div>
+
+    <div class="visualization-container">
+      <div id="loadingScreen" class="loading">
+        <div class="spinner">⟳</div>
+        Indlæser valgstedsdata...
+      </div>
+
+      <div class="visualization-header">
+        <div class="header-left">
+          <div class="title-box"><h1>KV21</h1></div>
+          <h2>Valgstedsresultater</h2>
+        </div>
+        <div class="header-right">
+          <h2 id="valgstedNavn">Valgsted</h2>
+          <span id="kommuneNavn" class="subtitle">Kommune</span>
+        </div>
+      </div>
+
+      <div class="visualization-content">
+        <div class="info-box">
+          <div id="stemmeInfo" class="subtitle">0 stemmer afgivet</div>
+          <div id="deltagelsesInfo" class="subtitle">Stemmeprocent: 0.0%</div>
+        </div>
+
+        <div id="partyList" class="party-results">
+          <!-- Parti resultater vil blive indsat her -->
+        </div>
+      </div>
+
+      <div class="visualization-footer">
+        <div>Kommunalvalg 2021</div>
+        <div>
+          <div id="opdateretTid" class="opdateret">
+            Sidst opdateret: --:--:--
+          </div>
+          <div id="nedtaelling" class="nedtaelling">
+            <svg
+              class="update-icon"
+              viewBox="0 0 24 24"
+              fill="currentColor"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="M17.65 6.35C16.2 4.9 14.21 4 12 4C7.58 4 4 7.58 4 12C4 16.42 7.58 20 12 20C15.73 20 18.84 17.45 19.73 14H17.65C16.83 16.33 14.61 18 12 18C8.69 18 6 15.31 6 12C6 8.69 8.69 6 12 6C13.66 6 15.14 6.69 16.22 7.78L13 11H20V4L17.65 6.35Z"
+              />
+            </svg>
+            Opdaterer om: 30 sek
+          </div>
+        </div>
+      </div>
+
+      <!-- Visuelle effekter for overgange -->
+      <div id="fadeOverlay" class="fade-overlay"></div>
+      <div id="updateFlash" class="update-flash"></div>
+      <div id="transitionOverlay" class="transition-overlay">
+        <div id="transitionContent" class="transition-content"></div>
+      </div>
+    </div>
+
+    <script src="../js/utils/common.js"></script>
+    <script src="../js/utils/party-colors.js"></script>
+    <script>
+      // Configuration
+      let settings = {
+        compareToMunicipality: true,
+        showVoteCounts: true,
+        partyLimit: 10,
+      };
+
+      // Application state
+      const state = {
+        kommuneId: null,
+        valgstedId: null,
+        valgstedData: null,
+        kommuneData: null,
+        lastUpdateTimestamp: null,
+      };
+
+      /**
+       * Initialize the visualization
+       */
+      function initialize() {
+        // Get parameters from URL
+        state.kommuneId = getUrlParam("kommune");
+        state.valgstedId = getUrlParam("valgsted");
+
+        // Load stored settings
+        loadSettings();
+
+        // Listen for messages from parent
+        setupMessageListener();
+
+        // If we have both kommune and valgsted IDs, load data
+        if (state.kommuneId && state.valgstedId) {
+          fetchData();
+        } else {
+          // Hide loading screen if parameters are missing
+          el("loadingScreen").style.display = "none";
+          el("valgstedNavn").textContent = "Vælg valgsted";
+          el("kommuneNavn").textContent = "Vælg kommune";
+        }
+      }
+
+      /**
+       * Load settings from localStorage
+       */
+      function loadSettings() {
+        const storedSettings = localStorage.getItem("stationsSettings");
+        if (storedSettings) {
+          try {
+            const parsed = JSON.parse(storedSettings);
+            settings = { ...settings, ...parsed };
+          } catch (e) {
+            console.error("Failed to parse settings", e);
+          }
+        }
+      }
+
+      /**
+       * Listen for messages from parent window
+       */
+      function setupMessageListener() {
+        window.addEventListener("message", function (event) {
+          // Check event source for security
+          // if (event.origin !== window.location.origin) return;
+
+          const { action, payload, settings: newSettings } = event.data;
+
+          if (action === "opdaterData" && payload) {
+            // Determine if this is kommuneData or valgstedData
+            if (payload.result && payload.result.electionPoints) {
+              // This is valgstedData
+              state.valgstedData = payload;
+            } else if (payload.result && !payload.result.electionPoints) {
+              // This is kommuneData
+              state.kommuneData = payload;
+            }
+
+            renderData();
+          } else if (action === "updateSettings" && newSettings) {
+            settings = { ...settings, ...newSettings };
+            if (state.valgstedData) {
+              renderData();
+            }
+          }
+        });
+      }
+
+      /**
+       * Fetch data from APIs
+       */
+      async function fetchData() {
+        try {
+          el("loadingScreen").style.display = "flex";
+
+          const cacheKey = Date.now();
+
+          // Prepare URLs
+          const kommuneUrl = `https://election-api.services.tv2.dk/kv/kv21/results/${state.kommuneId}?_cb=${cacheKey}`;
+          const valgstedUrl = `https://election-api.services.tv2.dk/kv/kv21/results/${state.kommuneId}/${state.valgstedId}?_cb=${cacheKey}`;
+
+          // Fetch both datasets in parallel
+          const [kommuneResponse, valgstedResponse] = await Promise.all([
+            fetch(kommuneUrl),
+            fetch(valgstedUrl),
+          ]);
+
+          if (!kommuneResponse.ok) {
+            throw new Error(`Kommune API error: ${kommuneResponse.status}`);
+          }
+
+          if (!valgstedResponse.ok) {
+            throw new Error(`Valgsted API error: ${valgstedResponse.status}`);
+          }
+
+          state.kommuneData = await kommuneResponse.json();
+          state.valgstedData = await valgstedResponse.json();
+
+          renderData();
+        } catch (error) {
+          console.error("Error fetching data:", error);
+          el("valgstedNavn").textContent = "DATAFEJL";
+          el("loadingScreen").innerHTML = `
+                    <div class="spinner">⟳</div>
+                    Fejl ved hentning af data: ${error.message}<br>
+                    Prøver igen om få sekunder...
+                `;
+        }
+      }
+
+      /**
+       * Render data to DOM
+       */
+      function renderData() {
+        // Need at least valgstedData
+        if (!state.valgstedData || !state.valgstedData.result) {
+          return;
+        }
+
+        const valgstedData = state.valgstedData;
+        const kommuneData = state.kommuneData || {};
+
+        // Update valgsted and kommune names
+        el("valgstedNavn").textContent =
+          valgstedData.result.name || "Ukendt valgsted";
+        el("kommuneNavn").textContent =
+          kommuneData.result?.name || "Ukendt kommune";
+
+        // Update counts
+        if (valgstedData.result) {
+          const votesGiven = valgstedData.result.votesGiven || 0;
+          el("stemmeInfo").textContent = `${formatNumber(
+            votesGiven
+          )} stemmer afgivet`;
+
+          const votesPercentage = valgstedData.result.votesPercentage || 0;
+          el(
+            "deltagelsesInfo"
+          ).textContent = `Stemmeprocent: ${votesPercentage.toFixed(1)}%`;
+        }
+
+        // Render party list
+        renderPartyList(valgstedData.parties || []);
+
+        // Update timestamp
+        if (valgstedData.lastUpdated) {
+          const dato = new Date(valgstedData.lastUpdated);
+          el(
+            "opdateretTid"
+          ).textContent = `Sidst opdateret: ${dato.toLocaleTimeString(
+            "da-DK"
+          )}`;
+          state.lastUpdateTimestamp = valgstedData.lastUpdated;
+        }
+
+        // Hide loading screen
+        el("loadingScreen").style.display = "none";
+      }
+
+      /**
+       * Render party list
+       * @param {Array} parties - List of parties
+       */
+      function renderPartyList(parties) {
+        // Get container
+        const partyList = el("partyList");
+        partyList.innerHTML = "";
+
+        // Get kommune parties for comparison if needed
+        const kommuneParties = {};
+        if (
+          settings.compareToMunicipality &&
+          state.kommuneData &&
+          state.kommuneData.parties
+        ) {
+          state.kommuneData.parties.forEach((party) => {
+            const letter = party.letter || party.abbreviation;
+            if (letter) {
+              kommuneParties[letter.toLowerCase()] = party;
+            }
+          });
+        }
+
+        // Sort parties by votes percentage
+        let sortedParties = [...parties].sort(
+          (a, b) => (b.votesPercentage || 0) - (a.votesPercentage || 0)
+        );
+
+        // Limit number of parties if specified
+        if (settings.partyLimit > 0) {
+          sortedParties = sortedParties.slice(0, settings.partyLimit);
+        }
+
+        // Create elements for each party
+        sortedParties.forEach((party, index) => {
+          const letter = (
+            party.letter ||
+            party.abbreviation ||
+            ""
+          ).toUpperCase();
+          const name = party.name || "Ukendt";
+          const color = farve(letter);
+          const percentage =
+            typeof party.votesPercentage === "number"
+              ? party.votesPercentage.toFixed(1)
+              : "0.0";
+          const votes = party.votes || 0;
+
+          // Check if we have kommune data for comparison
+          let comparison = null;
+          const letterKey = letter.toLowerCase();
+          if (settings.compareToMunicipality && kommuneParties[letterKey]) {
+            const kommunePercentage =
+              kommuneParties[letterKey].votesPercentage || 0;
+            const diff = (party.votesPercentage || 0) - kommunePercentage;
+
+            comparison = {
+              diff: diff,
+              higher: diff > 0.5,
+              lower: diff < -0.5,
+              same: Math.abs(diff) <= 0.5,
+            };
+          }
+
+          // Create party row
+          const partyRow = document.createElement("div");
+          partyRow.className = "party-row";
+          partyRow.style.animationDelay = `${index * 100}ms`;
+
+          // Party identity
+          const identity = document.createElement("div");
+          identity.className = "party-identity";
+          identity.innerHTML = `
+                    <div class="party-letter" style="background-color: ${color}">${letter}</div>
+                    <div class="party-name">${name}</div>
+                `;
+
+          // Party stats
+          const stats = document.createElement("div");
+          stats.className = "party-stats";
+
+          // Percentage stat
+          const percentStat = document.createElement("div");
+          percentStat.className = "stat-container";
+          percentStat.innerHTML = `
+                    <div class="stat-label">Procent</div>
+                    <div class="stat-value">${percentage}%</div>
+                `;
+
+          // Votes stat (if enabled)
+          let votesStat = null;
+          if (settings.showVoteCounts) {
+            votesStat = document.createElement("div");
+            votesStat.className = "stat-container";
+            votesStat.innerHTML = `
+                        <div class="stat-label">Stemmer</div>
+                        <div class="stat-value">${formatNumber(votes)}</div>
+                    `;
+          }
+
+          // Votes bar
+          const votesBar = document.createElement("div");
+          votesBar.className = "votes-bar";
+
+          const votesProgress = document.createElement("div");
+          votesProgress.className = "votes-progress";
+          votesProgress.style.backgroundColor = color;
+          votesProgress.style.width = "0%";
+          votesBar.appendChild(votesProgress);
+
+          // Comparison indicator (if enabled)
+          let comparisonEl = null;
+          if (comparison) {
+            comparisonEl = document.createElement("div");
+            comparisonEl.className = "comparison-indicator";
+
+            let arrowClass = "same";
+            let arrowSymbol = "⟷";
+            let diffText = "samme niveau";
+
+            if (comparison.higher) {
+              arrowClass = "higher";
+              arrowSymbol = "↑";
+              diffText = `+${comparison.diff.toFixed(1)}%`;
+            } else if (comparison.lower) {
+              arrowClass = "lower";
+              arrowSymbol = "↓";
+              diffText = `${comparison.diff.toFixed(1)}%`;
+            }
+
+            comparisonEl.innerHTML = `
+                        <span class="comparison-arrow ${arrowClass}">${arrowSymbol}</span>
+                        <span class="comparison-text">${diffText}</span>
+                    `;
+          }
+
+          // Assemble party row
+          partyRow.appendChild(identity);
+          stats.appendChild(percentStat);
+          if (votesStat) stats.appendChild(votesStat);
+          stats.appendChild(votesBar);
+          if (comparisonEl) stats.appendChild(comparisonEl);
+          partyRow.appendChild(stats);
+
+          // Add to DOM
+          partyList.appendChild(partyRow);
+
+          // Animate bar width after a short delay
+          setTimeout(() => {
+            votesProgress.style.width = `${Math.min(
+              100,
+              parseFloat(percentage) * 2
+            )}%`;
+          }, 100 + index * 50);
+        });
+      }
+
+      // Initialize when DOM is loaded
+      document.addEventListener("DOMContentLoaded", initialize);
+    </script>
+  </body>
+</html>
