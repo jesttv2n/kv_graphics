@@ -28,19 +28,21 @@ class DataService {
    * Initialize Pusher connection
    */
   initPusher() {
-    // Initialize Pusher with your app key
+    // Initialize Pusher with your app key and auth endpoint
     this.pusher = new Pusher("cd56da67c28807fe3818", {
       cluster: "eu",
       forceTLS: true,
+      authEndpoint:
+        "https://tv2nord-pusher-auth-server.0edfhx.easypanel.host/pusher/auth",
     });
 
-    // Subscribe to the main channel
-    this.channel = this.pusher.subscribe("kv-broadcast-channel");
+    // Subscribe to the private channel
+    this.channel = this.pusher.subscribe("private-kv-broadcast-channel");
 
     // Set up event handlers
     this.setupPusherEventHandlers();
 
-    log("Pusher forbindelse initialiseret");
+    log("Pusher forbindelse initialiseret med autentificering");
   }
 
   /**
