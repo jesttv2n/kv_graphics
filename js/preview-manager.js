@@ -6,7 +6,7 @@
 class PreviewManager {
   constructor(dataService) {
     this.dataService = dataService;
-    this.previewFrame = el("previewFrame");
+    this.previewFrame = document.getElementById("previewFrame");
     this.activeTemplate = "results"; // Default template
     this.templateViewUrls = {
       results: "views/results.html",
@@ -23,12 +23,16 @@ class PreviewManager {
    */
   init() {
     // Add event listeners for buttons
-    el("btnRefreshPreview").addEventListener("click", () =>
-      this.refreshPreview()
-    );
-    el("btnFullscreenPreview").addEventListener("click", () =>
-      this.openFullscreen()
-    );
+    const refreshBtn = document.getElementById("btnRefreshPreview");
+    const fullscreenBtn = document.getElementById("btnFullscreenPreview");
+
+    if (refreshBtn) {
+      refreshBtn.addEventListener("click", () => this.refreshPreview());
+    }
+
+    if (fullscreenBtn) {
+      fullscreenBtn.addEventListener("click", () => this.openFullscreen());
+    }
 
     // Listen for template changes
     document.addEventListener("templateChanged", (event) => {
@@ -96,81 +100,23 @@ class PreviewManager {
       }
     }
 
-    // Create scaled container if it doesn't exist
-    this.createScaledContainer();
-
-    // Set the iframe src
-    const iframe = this.previewFrame.querySelector("iframe");
-    if (iframe) {
-      iframe.src = url;
-      log(`Preview indlæser: ${url}`);
-    } else {
-      log("Preview iframe ikke fundet", "error");
-    }
-  }
-
-  /**
-   * Create a scaled container for the preview
-   */
-  createScaledContainer() {
-    // Check if we already have the container
-    if (this.previewFrame.querySelector(".scale-container")) {
-      return;
+    // If we don't have the previewFrame directly, try to find it
+    if (!this.previewFrame) {
+      this.previewFrame = document.getElementById("previewFrame");
+      if (!this.previewFrame) {
+        log("Preview iframe ikke fundet", "error");
+        return;
+      }
     }
 
-    // Clear the iframe
-    this.previewFrame.innerHTML = "";
+    // Set iframe source directly
+    this.previewFrame.src = url;
+    log(`Preview indlæser: ${url}`);
 
-    // Create container elements
-    const container = document.createElement("div");
-    container.className = "scale-container";
-
-    const content = document.createElement("div");
-    content.className = "scaled-content";
-
-    // Create a new iframe
-    const iframe = document.createElement("iframe");
-    iframe.style.width = "100%";
-    iframe.style.height = "100%";
-    iframe.style.border = "none";
-    iframe.src = "about:blank";
-
-    // Add resolution indicator
-    const indicator = document.createElement("div");
-    indicator.className = "resolution-indicator";
-    indicator.textContent = "1920×1080";
-
-    // Append elements
-    content.appendChild(iframe);
-    content.appendChild(indicator);
-    container.appendChild(content);
-    this.previewFrame.appendChild(container);
-
-    // Set up scale adjustment
-    this.adjustScale();
-    window.addEventListener("resize", () => this.adjustScale());
-  }
-
-  /**
-   * Adjust the scale to maintain aspect ratio
-   */
-  adjustScale() {
-    const container = this.previewFrame.querySelector(".scale-container");
-    const content = this.previewFrame.querySelector(".scaled-content");
-
-    if (!container || !content) return;
-
-    // Get container dimensions
-    const containerWidth = container.clientWidth;
-    const containerHeight = container.clientHeight;
-
-    // Calculate scale factor (minimum of width or height ratio)
-    const scaleX = containerWidth / 1920;
-    const scaleY = containerHeight / 1080;
-    const scale = Math.min(scaleX, scaleY);
-
-    // Apply scale
-    content.style.transform = `scale(${scale})`;
+    // Add a load event listener
+    this.previewFrame.onload = () => {
+      log(`Preview template ${this.activeTemplate} indlæst korrekt`);
+    };
   }
 
   /**
@@ -178,38 +124,9 @@ class PreviewManager {
    * @param {Object} detail - Event detail object with updated data
    */
   updatePreview(detail) {
-    // Check if preview frame is loaded
-    const iframe = this.previewFrame.querySelector("iframe");
-    if (!iframe || !iframe.contentWindow) {
-      return;
-    }
-
-    // Send message to iframe with the new data
-    iframe.contentWindow.postMessage(
-      {
-        action: "opdaterData",
-        payload: detail.data,
-      },
-      "*"
-    );
-
-    log("Data sendt til preview");
-  }
-  /**
-   * Refresh the preview frame
-   */
-  refreshPreview() {
-    this.loadTemplate();
-    log("Preview opdateret");
-  }
-
-  /**
-   * Update preview with new data
-   * @param {Object} detail - Event detail object with updated data
-   */
-  updatePreview(detail) {
-    // Check if preview frame is loaded
-    if (!this.previewFrame.contentWindow) {
+    // Check if preview frame is available
+    if (!this.previewFrame || !this.previewFrame.contentWindow) {
+      log("Preview frame ikke tilgængelig for dataopdatering", "warning");
       return;
     }
 
@@ -223,6 +140,14 @@ class PreviewManager {
     );
 
     log("Data sendt til preview");
+  }
+
+  /**
+   * Refresh the preview frame
+   */
+  refreshPreview() {
+    this.loadTemplate();
+    log("Preview opdateret");
   }
 
   /**

@@ -6,7 +6,7 @@
 class ProgramManager {
   constructor(dataService) {
     this.dataService = dataService;
-    this.programFrame = el("programFrame");
+    this.programFrame = document.getElementById("programFrame");
     this.activeTemplate = null; // No active template on start
     this.isOnAir = false;
     this.templateViewUrls = {
@@ -24,12 +24,16 @@ class ProgramManager {
    */
   init() {
     // Add event listeners for buttons
-    el("btnRefreshProgram").addEventListener("click", () =>
-      this.refreshProgram()
-    );
-    el("btnFullscreenProgram").addEventListener("click", () =>
-      this.openFullscreen()
-    );
+    const refreshBtn = document.getElementById("btnRefreshProgram");
+    const fullscreenBtn = document.getElementById("btnFullscreenProgram");
+
+    if (refreshBtn) {
+      refreshBtn.addEventListener("click", () => this.refreshProgram());
+    }
+
+    if (fullscreenBtn) {
+      fullscreenBtn.addEventListener("click", () => this.openFullscreen());
+    }
 
     // Listen for transition events
     document.addEventListener("transitionExecuted", (event) => {
@@ -84,6 +88,15 @@ class ProgramManager {
    * @param {Object} params - Parameters for the template
    */
   loadTemplate(params = {}) {
+    // Ensure we have a program frame
+    if (!this.programFrame) {
+      this.programFrame = document.getElementById("programFrame");
+      if (!this.programFrame) {
+        log("Program iframe ikke fundet", "error");
+        return;
+      }
+    }
+
     let url = this.templateViewUrls[this.activeTemplate];
 
     // Build URL parameters
@@ -112,84 +125,17 @@ class ProgramManager {
       url += `?${urlParams.toString()}`;
     }
 
-    // Create scaled container if it doesn't exist
-    this.createScaledContainer();
-
     // Set the iframe src
-    const iframe = this.programFrame.querySelector("iframe");
-    if (iframe) {
-      iframe.src = url;
-      log(`Program indlæser: ${url}`);
-    } else {
-      log("Program iframe ikke fundet", "error");
-    }
+    this.programFrame.src = url;
+    log(`Program indlæser: ${url}`);
+
+    // Add a load event handler
+    this.programFrame.onload = () => {
+      log(`Program template ${this.activeTemplate} indlæst korrekt`);
+    };
 
     // Update status indicator
     this.updateStatus();
-  }
-
-  /**
-   * Create a scaled container for the program
-   */
-  createScaledContainer() {
-    // Check if we already have the container
-    if (this.programFrame.querySelector(".scale-container")) {
-      return;
-    }
-
-    // Clear the iframe
-    this.programFrame.innerHTML = "";
-
-    // Create container elements
-    const container = document.createElement("div");
-    container.className = "scale-container";
-
-    const content = document.createElement("div");
-    content.className = "scaled-content";
-
-    // Create a new iframe
-    const iframe = document.createElement("iframe");
-    iframe.style.width = "100%";
-    iframe.style.height = "100%";
-    iframe.style.border = "none";
-    iframe.src = "about:blank";
-
-    // Add resolution indicator
-    const indicator = document.createElement("div");
-    indicator.className = "resolution-indicator";
-    indicator.textContent = "1920×1080";
-
-    // Append elements
-    content.appendChild(iframe);
-    content.appendChild(indicator);
-    container.appendChild(content);
-    this.programFrame.appendChild(container);
-
-    // Set up scale adjustment
-    this.adjustScale();
-    window.addEventListener("resize", () => this.adjustScale());
-  }
-
-  /**
-   * Adjust the scale to maintain aspect ratio
-   */
-  adjustScale() {
-    const container = this.programFrame.querySelector(".scale-container");
-    const content = this.programFrame.querySelector(".scaled-content");
-
-    if (!container || !content) return;
-
-    // Get container dimensions
-    const containerWidth = container.clientWidth;
-    const containerHeight = container.clientHeight;
-
-    // Calculate scale factor (minimum of width or height ratio)
-    const scaleX = containerWidth / 1920;
-    const scaleY = containerHeight / 1080;
-    const scale = Math.min(scaleX, scaleY);
-
-    // Apply scale
-    content.style.transform = `scale(${scale})`;
   }
 
   /**
@@ -198,13 +144,17 @@ class ProgramManager {
    */
   updateProgram(detail) {
     // Check if program frame is loaded and we're on air
-    const iframe = this.programFrame.querySelector("iframe");
-    if (!iframe || !iframe.contentWindow || !this.isOnAir) {
+    if (
+      !this.programFrame ||
+      !this.programFrame.contentWindow ||
+      !this.isOnAir
+    ) {
+      log("Program frame ikke tilgængelig for dataopdatering", "warning");
       return;
     }
 
     // Send message to iframe with the new data
-    iframe.contentWindow.postMessage(
+    this.programFrame.contentWindow.postMessage(
       {
         action: "opdaterData",
         payload: detail.data,
@@ -228,31 +178,14 @@ class ProgramManager {
   }
 
   /**
-   * Update program with new data
-   * @param {Object} detail - Event detail object with updated data
-   */
-  updateProgram(detail) {
-    // Check if program frame is loaded and we're on air
-    if (!this.programFrame.contentWindow || !this.isOnAir) {
-      return;
-    }
-
-    // Send message to iframe with the new data
-    this.programFrame.contentWindow.postMessage(
-      {
-        action: "opdaterData",
-        payload: detail.data,
-      },
-      "*"
-    );
-
-    log("Data sendt til program");
-  }
-
-  /**
    * Open the program in fullscreen
    */
   openFullscreen() {
+    if (!this.programFrame) {
+      log("Program frame ikke fundet", "error");
+      return;
+    }
+
     if (this.programFrame.requestFullscreen) {
       this.programFrame.requestFullscreen();
     } else if (this.programFrame.webkitRequestFullscreen) {
@@ -273,12 +206,18 @@ class ProgramManager {
   setOnAir(status) {
     this.isOnAir = status;
 
-    // Update visual indicator
-    const frame = el("programFrame").parentNode;
-    if (status) {
-      frame.classList.add("on-air");
-    } else {
-      frame.classList.remove("on-air");
+    // Update visual indicator (find parent element with correct class)
+    if (this.programFrame) {
+      const parent =
+        this.programFrame.closest(".visning-frame") ||
+        this.programFrame.parentNode;
+      if (parent) {
+        if (status) {
+          parent.classList.add("on-air");
+        } else {
+          parent.classList.remove("on-air");
+        }
+      }
     }
 
     // Update status
@@ -291,8 +230,12 @@ class ProgramManager {
    * Update program status indicator in the UI
    */
   updateStatus() {
-    const statusIndicator = el("statusIndicator");
-    const statusText = el("statusText");
+    const statusIndicator = document.getElementById("statusIndicator");
+    const statusText = document.getElementById("statusText");
+
+    if (!statusIndicator || !statusText) {
+      return; // Elements not found, can happen in display mode
+    }
 
     if (this.isOnAir && this.activeTemplate) {
       statusIndicator.className = "status-indicator status-online";
@@ -357,7 +300,12 @@ class ProgramManager {
    */
   takeOffAir() {
     this.setOnAir(false);
-    this.programFrame.src = "about:blank";
+
+    // In a production environment, we would show a blank screen or slate
+    if (this.programFrame) {
+      this.programFrame.src = "about:blank";
+    }
+
     this.activeTemplate = null;
     log("Program taget af luften");
   }

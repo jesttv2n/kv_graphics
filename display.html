@@ -65,17 +65,6 @@
         box-shadow: 0 0 5px #f0ad4e;
         animation: pulse 1.5s infinite;
       }
-      @keyframes pulse {
-        0% {
-          opacity: 0.5;
-        }
-        50% {
-          opacity: 1;
-        }
-        100% {
-          opacity: 0.5;
-        }
-      }
       .debug-panel {
         position: absolute;
         bottom: 10px;
@@ -95,10 +84,50 @@
       .debug-panel.visible {
         display: block;
       }
+      /* Loading indicator */
+      .initial-loader {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        text-align: center;
+        color: white;
+        font-family: sans-serif;
+      }
+      .spinner {
+        display: inline-block;
+        width: 50px;
+        height: 50px;
+        border: 3px solid rgba(255, 255, 255, 0.3);
+        border-radius: 50%;
+        border-top-color: #fff;
+        animation: spin 1s ease-in-out infinite;
+      }
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+      @keyframes pulse {
+        0% {
+          opacity: 0.5;
+        }
+        50% {
+          opacity: 1;
+        }
+        100% {
+          opacity: 0.5;
+        }
+      }
     </style>
   </head>
   <body>
     <div class="display-container">
+      <div class="initial-loader">
+        <div class="spinner"></div>
+        <p>Indlæser valgdata...</p>
+      </div>
+
       <iframe
         id="programFrame"
         class="program-frame"
@@ -124,6 +153,7 @@
       let pusher = null;
       let channel = null;
       let debugMode = false;
+      let currentTemplate = null;
 
       /**
        * Initialize the display
@@ -137,7 +167,9 @@
 
         // Get Pusher credentials from local storage or URL params
         const pusherKey =
-          getUrlParam("key") || localStorage.getItem("pusherKey");
+          getUrlParam("key") ||
+          localStorage.getItem("pusherKey") ||
+          "cd56da67c28807fe3818";
         const pusherCluster =
           getUrlParam("cluster") ||
           localStorage.getItem("pusherCluster") ||
@@ -162,6 +194,24 @@
             toggleDebugPanel();
           }
         });
+
+        // Load initial template from URL params if available
+        const initialTemplate = getUrlParam("template");
+        const kommuneId = getUrlParam("kommune");
+        const valgstedId = getUrlParam("valgsted");
+
+        if (initialTemplate) {
+          const params = {};
+          if (kommuneId) params.kommuneId = kommuneId;
+          if (valgstedId) params.valgstedId = valgstedId;
+
+          loadTemplate(initialTemplate, params);
+        } else {
+          // Default to results template if available
+          const defaultParams = {};
+          if (kommuneId) defaultParams.kommuneId = kommuneId;
+          loadTemplate("results", defaultParams);
+        }
       }
 
       /**
@@ -174,10 +224,12 @@
           pusher = new Pusher(key, {
             cluster: cluster,
             forceTLS: true,
+            authEndpoint:
+              "https://reliable-cuchufli-e643b7.netlify.app/.netlify/functions/auth",
           });
 
           // Subscribe to channel
-          channel = pusher.subscribe("kv-broadcast-channel");
+          channel = pusher.subscribe("private-kv-broadcast-channel");
 
           // Connection events
           pusher.connection.bind("connected", () => {
@@ -208,37 +260,37 @@
        */
       function setupPusherEventHandlers() {
         // Listen for template changes
-        channel.bind("template-changed", (data) => {
+        channel.bind("client-template-changed", (data) => {
           log(`Modtog template ændring: ${data.template}`);
           loadTemplate(data.template, {});
         });
 
         // Listen for transition commands
-        channel.bind("transition-executed", (data) => {
+        channel.bind("client-transition-executed", (data) => {
           log(`Modtog transitions-kommando: ${data.type} til ${data.template}`);
           executeTransition(data.type, data.template, data.params);
         });
 
         // Listen for kommune changes
-        channel.bind("kommune-changed", (data) => {
+        channel.bind("client-kommune-changed", (data) => {
           log(`Modtog kommune ændring: ${data.kommuneId}`);
-          // The actual kommun data will come in the data-updated event
+          // The actual kommune data will come in the data-updated event
         });
 
         // Listen for valgsted changes
-        channel.bind("valgsted-changed", (data) => {
+        channel.bind("client-valgsted-changed", (data) => {
           log(`Modtog valgsted ændring: ${data.kommuneId}/${data.valgstedId}`);
           // The actual valgsted data will come in the data-updated event
         });
 
         // Listen for kommune data updates
-        channel.bind("kommune-data-updated", (data) => {
+        channel.bind("client-kommune-data-updated", (data) => {
           log(`Modtog kommunedata opdatering for ${data.kommuneId}`);
           updateDisplayWithData(data);
         });
 
         // Listen for valgsted data updates
-        channel.bind("valgsted-data-updated", (data) => {
+        channel.bind("client-valgsted-data-updated", (data) => {
           log(
             `Modtog valgstedsdata opdatering for ${data.kommuneId}/${data.valgstedId}`
           );
@@ -246,7 +298,7 @@
         });
 
         // Listen for kandidat data updates
-        channel.bind("kandidat-data-updated", (data) => {
+        channel.bind("client-kandidat-data-updated", (data) => {
           log(`Modtog kandidatdata opdatering for ${data.kommuneId}`);
           updateDisplayWithData(data);
         });
@@ -258,6 +310,9 @@
        * @param {Object} params - Parameters
        */
       function loadTemplate(templateName, params = {}) {
+        // Save current template
+        currentTemplate = templateName;
+
         // Get parameters
         const kommuneId = params.kommuneId || getUrlParam("kommune");
         const valgstedId = params.valgstedId || getUrlParam("valgsted");
@@ -266,10 +321,14 @@
         let url;
         switch (templateName) {
           case "results":
-            url = `views/results.html?kommune=${kommuneId || ""}`;
+            url = `views/results.html${
+              kommuneId ? `?kommune=${kommuneId}` : ""
+            }`;
             break;
           case "candidates":
-            url = `views/candidates.html?kommune=${kommuneId || ""}`;
+            url = `views/candidates.html${
+              kommuneId ? `?kommune=${kommuneId}` : ""
+            }`;
             break;
           case "stations":
             url = `views/stations.html?kommune=${kommuneId || ""}&valgsted=${
@@ -281,9 +340,21 @@
             return;
         }
 
+        // Hide initial loader when we have loaded a template
+        document.querySelector(".initial-loader").style.display = "none";
+
+        // Show the iframe
+        const frame = document.getElementById("programFrame");
+        frame.style.display = "block";
+
         // Load template into iframe
-        document.getElementById("programFrame").src = url;
+        frame.src = url;
         log(`Indlæst template: ${url}`);
+
+        // Listen for iframe load event to log success
+        frame.onload = function () {
+          log(`Template ${templateName} indlæst korrekt`);
+        };
       }
 
       /**
@@ -293,8 +364,36 @@
        * @param {Object} params - Parameters
        */
       function executeTransition(type, template, params) {
-        // For now, we just load the template - transitions will be added in the future
-        loadTemplate(template, params);
+        const frame = document.getElementById("programFrame");
+
+        if (type === "fade") {
+          // Apply fade effect
+          frame.style.transition = "opacity 1s ease-in-out";
+          frame.style.opacity = 0;
+
+          setTimeout(() => {
+            loadTemplate(template, params);
+
+            // Fade back in
+            setTimeout(() => {
+              frame.style.opacity = 1;
+
+              // Reset transition after animation complete
+              setTimeout(() => {
+                frame.style.transition = "";
+              }, 1000);
+            }, 50);
+          }, 1000);
+        } else if (type === "cut") {
+          // Just load the template immediately
+          loadTemplate(template, params);
+        } else {
+          // For other transitions, use fade as fallback
+          log(
+            `Transition type '${type}' not fully implemented, using fade instead`
+          );
+          executeTransition("fade", template, params);
+        }
       }
 
       /**
@@ -336,6 +435,51 @@
         const panel = document.getElementById("debugPanel");
         panel.classList.toggle("visible");
         debugMode = panel.classList.contains("visible");
+      }
+
+      /**
+       * Logger helper function
+       * Logs message to console and to debug panel if visible
+       * @param {string} message - Message to log
+       * @param {string} type - Log type (info, error, warning)
+       */
+      function log(message, type = "info") {
+        // Log to console
+        if (type === "error") {
+          console.error(message);
+        } else if (type === "warning") {
+          console.warn(message);
+        } else {
+          console.log(message);
+        }
+
+        // Log to debug panel
+        if (debugMode) {
+          const logContainer = document.getElementById("logContainer");
+          const now = new Date();
+          const timeStr = now.toLocaleTimeString();
+
+          const logEntry = document.createElement("div");
+          logEntry.className = "log-entry";
+          logEntry.innerHTML = `
+            <span class="log-time">[${timeStr}]</span>
+            <span class="log-message ${
+              type === "error"
+                ? "log-error"
+                : type === "warning"
+                ? "log-warning"
+                : ""
+            }">${message}</span>
+          `;
+
+          logContainer.appendChild(logEntry);
+          logContainer.scrollTop = logContainer.scrollHeight;
+
+          // Limit number of log entries
+          while (logContainer.children.length > 100) {
+            logContainer.removeChild(logContainer.firstChild);
+          }
+        }
       }
 
       // Initialize when DOM is ready
