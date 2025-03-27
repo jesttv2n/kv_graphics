@@ -20,6 +20,7 @@ class DataService {
     this.pusher = null;
     this.channel = null;
     this.isControlPanel = false; // Set to true for control panel, false for display
+    this.pendingEvents = []; // Queue for events to be sent when Pusher is ready
 
     this.initPusher();
   }
@@ -35,8 +36,43 @@ class DataService {
       authEndpoint: "https://din-netlify-app.netlify.app/pusher/auth",
     });
 
+    // Marker kanalen som ikke klar
+    this.channelReady = false;
+
     // Subscribe to the private channel
     this.channel = this.pusher.subscribe("private-kv-broadcast-channel");
+
+    // VIGTIGT: Vent på at abonnementet er færdigt, før du tillader sending af events
+    this.channel.bind("pusher:subscription_succeeded", () => {
+      console.log("Subscription succeeded - nu kan vi sende events!");
+      this.channelReady = true;
+
+      // Hvis der er ventende events i kø, send dem nu
+      if (this.pendingEvents && this.pendingEvents.length > 0) {
+        console.log(`Sender ${this.pendingEvents.length} ventende events`);
+        this.pendingEvents.forEach((event) => {
+          this.channel.trigger(event.name, event.data);
+        });
+        this.pendingEvents = [];
+      }
+    });
+
+    // Hjælperfunktion til at sende events
+sendPusherEvent(eventName, data) {
+  if (!this.channelReady) {
+    console.log(`Kanal ikke klar endnu, sætter event '${eventName}' i kø`);
+    this.pendingEvents.push({ name: eventName, data: data });
+    return false;
+  }
+  
+  try {
+    this.channel.trigger(eventName, data);
+    return true;
+  } catch (error) {
+    console.error(`Fejl ved sending af event: ${error.message}`);
+    return false;
+  }
+}
 
     // Set up event handlers
     this.setupPusherEventHandlers();
@@ -138,7 +174,7 @@ class DataService {
     // If control panel, trigger Pusher event
     if (this.isControlPanel) {
       // For client events, we need to prefix with 'client-'
-      this.channel.trigger("client-kommune-changed", {
+      this.sendPusherEvent("client-kommune-changed", {
         kommuneId: kommuneId,
       });
     }
@@ -163,7 +199,7 @@ class DataService {
     // If control panel, trigger Pusher event
     if (this.isControlPanel) {
       // For client events, we need to prefix with 'client-'
-      this.channel.trigger("client-valgsted-changed", {
+      this.sendPusherEvent("client-valgsted-changed", {
         kommuneId: this.activeKommuneId,
         valgstedId: valgstedId,
       });
@@ -237,7 +273,7 @@ class DataService {
 
       // If control panel, trigger Pusher event
       if (this.isControlPanel) {
-        this.channel.trigger("client-kommune-data-updated", {
+        this.sendPusherEvent("client-kommune-data-updated", {
           kommuneId: targetKommuneId,
           data: data,
         });
@@ -299,7 +335,7 @@ class DataService {
 
       // If control panel, trigger Pusher event
       if (this.isControlPanel) {
-        this.channel.trigger("client-valgsted-data-updated", {
+        this.sendPusherEvent("client-valgsted-data-updated", {
           kommuneId: targetKommuneId,
           valgstedId: targetValgstedId,
           data: data,
@@ -356,7 +392,7 @@ class DataService {
 
       // If control panel, trigger Pusher event
       if (this.isControlPanel) {
-        this.channel.trigger("client-kandidat-data-updated", {
+        this.sendPusherEvent("client-kandidat-data-updated", {
           kommuneId: targetKommuneId,
           data: data,
         });
@@ -377,7 +413,7 @@ class DataService {
   sendTemplateChange(templateName) {
     if (!this.isControlPanel) return;
 
-    this.channel.trigger("client-template-changed", {
+    this.sendPusherEvent("client-template-changed", {
       template: templateName,
     });
 
@@ -393,7 +429,7 @@ class DataService {
   sendTransitionCommand(type, template, params) {
     if (!this.isControlPanel) return;
 
-    this.channel.trigger("client-transition-executed", {
+    this.sendPusherEvent("client-transition-executed", {
       type: type,
       template: template,
       params: params,
