@@ -1,6 +1,6 @@
 /**
  * Program Manager for KV Broadcast System
- * Handles all program (PGM) window functionality
+ * Handles all program (PGM) window functionality using scaled display viewer
  */
 
 class ProgramManager {
@@ -9,11 +9,7 @@ class ProgramManager {
     this.programFrame = document.getElementById("programFrame");
     this.activeTemplate = null; // No active template on start
     this.isOnAir = false;
-    this.templateViewUrls = {
-      results: "views/results.html",
-      candidates: "views/candidates.html",
-      stations: "views/stations.html",
-    };
+    this.viewerUrl = "scaled-display-viewer.html"; // The scaled viewer HTML
 
     // Initialize
     this.init();
@@ -73,7 +69,8 @@ class ProgramManager {
    * @param {Object} params - Parameters for the template
    */
   setTemplate(templateName, params = {}) {
-    if (!this.templateViewUrls[templateName]) {
+    const validTemplates = ["results", "candidates", "stations"];
+    if (!validTemplates.includes(templateName)) {
       log(`Ukendt template: ${templateName}`, "error");
       return;
     }
@@ -84,7 +81,7 @@ class ProgramManager {
   }
 
   /**
-   * Load the active template into the program frame
+   * Load the active template into the program frame using scaled viewer
    * @param {Object} params - Parameters for the template
    */
   loadTemplate(params = {}) {
@@ -97,32 +94,24 @@ class ProgramManager {
       }
     }
 
-    let url = this.templateViewUrls[this.activeTemplate];
-
-    // Build URL parameters
-    const urlParams = new URLSearchParams();
+    // Build URL for the scaled viewer
+    let url =
+      this.viewerUrl + `?viewer=program&template=${this.activeTemplate}`;
 
     // Add kommune parameter if available
     if (params.kommuneId || this.dataService.getActiveKommuneId()) {
-      urlParams.append(
-        "kommune",
+      url += `&kommune=${
         params.kommuneId || this.dataService.getActiveKommuneId()
-      );
+      }`;
     }
 
     // Add valgsted parameter if stations template and valgsted is available
     if (this.activeTemplate === "stations") {
       if (params.valgstedId || this.dataService.getActiveValgstedId()) {
-        urlParams.append(
-          "valgsted",
+        url += `&valgsted=${
           params.valgstedId || this.dataService.getActiveValgstedId()
-        );
+        }`;
       }
-    }
-
-    // Add parameters to URL if any are set
-    if (urlParams.toString()) {
-      url += `?${urlParams.toString()}`;
     }
 
     // Set the iframe src
@@ -301,7 +290,7 @@ class ProgramManager {
   takeOffAir() {
     this.setOnAir(false);
 
-    // In a production environment, we would show a blank screen or slate
+    // Clear the frame
     if (this.programFrame) {
       this.programFrame.src = "about:blank";
     }

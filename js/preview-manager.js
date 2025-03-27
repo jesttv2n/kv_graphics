@@ -1,6 +1,6 @@
 /**
  * Preview Manager for KV Broadcast System
- * Handles all preview window functionality
+ * Handles all preview window functionality using scaled display viewer
  */
 
 class PreviewManager {
@@ -8,11 +8,7 @@ class PreviewManager {
     this.dataService = dataService;
     this.previewFrame = document.getElementById("previewFrame");
     this.activeTemplate = "results"; // Default template
-    this.templateViewUrls = {
-      results: "views/results.html",
-      candidates: "views/candidates.html",
-      stations: "views/stations.html",
-    };
+    this.viewerUrl = "scaled-display-viewer.html"; // The scaled viewer HTML
 
     // Initialize
     this.init();
@@ -72,7 +68,8 @@ class PreviewManager {
    * @param {string} templateName - Template name (results, candidates, stations)
    */
   setTemplate(templateName) {
-    if (!this.templateViewUrls[templateName]) {
+    const validTemplates = ["results", "candidates", "stations"];
+    if (!validTemplates.includes(templateName)) {
       log(`Ukendt template: ${templateName}`, "error");
       return;
     }
@@ -83,24 +80,25 @@ class PreviewManager {
   }
 
   /**
-   * Load the active template into the preview frame
+   * Load the active template into the preview frame using scaled viewer
    */
   loadTemplate() {
     const kommuneId = this.dataService.getActiveKommuneId();
     const valgstedId = this.dataService.getActiveValgstedId();
 
-    let url = this.templateViewUrls[this.activeTemplate];
+    // Build URL for the scaled viewer
+    let url =
+      this.viewerUrl + `?viewer=preview&template=${this.activeTemplate}`;
 
-    // Add parameters based on template type
     if (kommuneId) {
-      url += `?kommune=${kommuneId}`;
-
-      if (this.activeTemplate === "stations" && valgstedId) {
-        url += `&valgsted=${valgstedId}`;
-      }
+      url += `&kommune=${kommuneId}`;
     }
 
-    // If we don't have the previewFrame directly, try to find it
+    if (this.activeTemplate === "stations" && valgstedId) {
+      url += `&valgsted=${valgstedId}`;
+    }
+
+    // Ensure we have a preview frame
     if (!this.previewFrame) {
       this.previewFrame = document.getElementById("previewFrame");
       if (!this.previewFrame) {
@@ -109,11 +107,11 @@ class PreviewManager {
       }
     }
 
-    // Set iframe source directly
+    // Set the iframe src
     this.previewFrame.src = url;
     log(`Preview indlæser: ${url}`);
 
-    // Add a load event listener
+    // Add a load event handler
     this.previewFrame.onload = () => {
       log(`Preview template ${this.activeTemplate} indlæst korrekt`);
     };
@@ -154,6 +152,11 @@ class PreviewManager {
    * Open the preview in fullscreen
    */
   openFullscreen() {
+    if (!this.previewFrame) {
+      log("Preview frame ikke fundet", "error");
+      return;
+    }
+
     if (this.previewFrame.requestFullscreen) {
       this.previewFrame.requestFullscreen();
     } else if (this.previewFrame.webkitRequestFullscreen) {
