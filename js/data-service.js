@@ -49,7 +49,8 @@ class DataService {
     this.pusher = new Pusher("cd56da67c28807fe3818", {
       cluster: "eu",
       forceTLS: true,
-      authEndpoint: "https://reliable-cuchufli-e643b7.netlify.app/pusher/auth",
+      authEndpoint:
+        "https://reliable-cuchufli-e643b7.netlify.app/.netlify/functions/auth",
     });
 
     // Marker kanalen som ikke klar
