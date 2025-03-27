@@ -25,6 +25,22 @@ class DataService {
     this.initPusher();
   }
 
+  // Hjælperfunktion til at sende events
+  sendPusherEvent(eventName, data) {
+    if (!this.channelReady) {
+      console.log(`Kanal ikke klar endnu, sætter event '${eventName}' i kø`);
+      this.pendingEvents.push({ name: eventName, data: data });
+      return false;
+    }
+
+    try {
+      this.channel.trigger(eventName, data);
+      return true;
+    } catch (error) {
+      console.error(`Fejl ved sending af event: ${error.message}`);
+      return false;
+    }
+  }
   /**
    * Initialize Pusher connection
    */
@@ -56,23 +72,6 @@ class DataService {
         this.pendingEvents = [];
       }
     });
-
-    // Hjælperfunktion til at sende events
-sendPusherEvent(eventName, data) {
-  if (!this.channelReady) {
-    console.log(`Kanal ikke klar endnu, sætter event '${eventName}' i kø`);
-    this.pendingEvents.push({ name: eventName, data: data });
-    return false;
-  }
-  
-  try {
-    this.channel.trigger(eventName, data);
-    return true;
-  } catch (error) {
-    console.error(`Fejl ved sending af event: ${error.message}`);
-    return false;
-  }
-}
 
     // Set up event handlers
     this.setupPusherEventHandlers();
