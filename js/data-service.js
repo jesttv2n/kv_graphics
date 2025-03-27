@@ -32,8 +32,7 @@ class DataService {
     this.pusher = new Pusher("cd56da67c28807fe3818", {
       cluster: "eu",
       forceTLS: true,
-      authEndpoint:
-        "https://tv2nord-pusher-auth-server.0edfhx.easypanel.host/pusher/auth",
+      authEndpoint: "https://din-netlify-app.netlify.app/pusher/auth",
     });
 
     // Subscribe to the private channel
