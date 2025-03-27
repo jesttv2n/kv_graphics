@@ -16,6 +16,7 @@
   background-color: #00407a;
   color: white;
   font-family: "Segoe UI", Roboto, Oxygen, Ubuntu, "Open Sans", sans-serif;
+  z-index: 20;
 }
 
 /* Header and Footer */
