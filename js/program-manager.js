@@ -1,6 +1,6 @@
 /**
  * Program Manager for KV Broadcast System
- * Handles all program (PGM) window functionality using scaled display viewer
+ * Handles all program (PGM) window functionality
  */
 
 class ProgramManager {
@@ -10,6 +10,8 @@ class ProgramManager {
     this.activeTemplate = null; // No active template on start
     this.isOnAir = false;
     this.viewerUrl = "scaled-display-viewer.html"; // The scaled viewer HTML
+    this.activeTemplateKommuneId = null;
+    this.activeTemplateValgstedId = null;
 
     // Initialize
     this.init();
@@ -35,27 +37,41 @@ class ProgramManager {
     document.addEventListener("transitionExecuted", (event) => {
       this.setTemplate(event.detail.template, event.detail.params);
       this.setOnAir(true);
+
+      // Save the active template and kommune for filtering
+      this.activeTemplateKommuneId = this.dataService.getActiveKommuneId();
+      this.activeTemplateValgstedId = this.dataService.getActiveValgstedId();
     });
 
-    // Listen for data updates to pass to program if it's on air
+    // Listen for data updates to pass to program if it's on air AND matches current selections
     document.addEventListener("kommuneDataUpdated", (event) => {
       if (
         this.isOnAir &&
         (this.activeTemplate === "results" ||
-          this.activeTemplate === "candidates")
+          this.activeTemplate === "candidates") &&
+        event.detail.kommuneId === this.activeTemplateKommuneId // Only update if kommune matches
       ) {
         this.updateProgram(event.detail);
       }
     });
 
     document.addEventListener("valgstedDataUpdated", (event) => {
-      if (this.isOnAir && this.activeTemplate === "stations") {
+      if (
+        this.isOnAir &&
+        this.activeTemplate === "stations" &&
+        event.detail.kommuneId === this.activeTemplateKommuneId &&
+        event.detail.valgstedId === this.activeTemplateValgstedId // Only update if valgsted matches
+      ) {
         this.updateProgram(event.detail);
       }
     });
 
     document.addEventListener("kandidatDataUpdated", (event) => {
-      if (this.isOnAir && this.activeTemplate === "candidates") {
+      if (
+        this.isOnAir &&
+        this.activeTemplate === "candidates" &&
+        event.detail.kommuneId === this.activeTemplateKommuneId // Only update if kommune matches
+      ) {
         this.updateProgram(event.detail);
       }
     });
@@ -81,36 +97,36 @@ class ProgramManager {
   }
 
   /**
-   * Load the active template into the program frame using scaled viewer
+   * Load the active template into the program frame
    * @param {Object} params - Parameters for the template
    */
   loadTemplate(params = {}) {
-    // Ensure we have a program frame
-    if (!this.programFrame) {
-      this.programFrame = document.getElementById("programFrame");
-      if (!this.programFrame) {
-        log("Program iframe ikke fundet", "error");
-        return;
-      }
-    }
-
     // Build URL for the scaled viewer
     let url =
       this.viewerUrl + `?viewer=program&template=${this.activeTemplate}`;
 
     // Add kommune parameter if available
     if (params.kommuneId || this.dataService.getActiveKommuneId()) {
-      url += `&kommune=${
-        params.kommuneId || this.dataService.getActiveKommuneId()
-      }`;
+      const kommuneId =
+        params.kommuneId || this.dataService.getActiveKommuneId();
+      url += `&kommune=${kommuneId}`;
     }
 
     // Add valgsted parameter if stations template and valgsted is available
     if (this.activeTemplate === "stations") {
-      if (params.valgstedId || this.dataService.getActiveValgstedId()) {
-        url += `&valgsted=${
-          params.valgstedId || this.dataService.getActiveValgstedId()
-        }`;
+      const valgstedId =
+        params.valgstedId || this.dataService.getActiveValgstedId();
+      if (valgstedId) {
+        url += `&valgsted=${valgstedId}`;
+      }
+    }
+
+    // Ensure we have a program frame
+    if (!this.programFrame) {
+      this.programFrame = document.getElementById("programFrame");
+      if (!this.programFrame) {
+        log("Program iframe ikke fundet", "error");
+        return;
       }
     }
 
@@ -121,10 +137,50 @@ class ProgramManager {
     // Add a load event handler
     this.programFrame.onload = () => {
       log(`Program template ${this.activeTemplate} indlæst korrekt`);
+
+      // Send template settings if available
+      this.sendTemplateSettings();
     };
 
     // Update status indicator
     this.updateStatus();
+  }
+
+  /**
+   * Send template settings to the program viewer
+   */
+  sendTemplateSettings() {
+    if (!this.programFrame || !this.programFrame.contentWindow) {
+      return;
+    }
+
+    // Get template-specific settings from localStorage
+    let settings = null;
+
+    switch (this.activeTemplate) {
+      case "results":
+        settings = JSON.parse(localStorage.getItem("resultsSettings") || "{}");
+        break;
+      case "candidates":
+        settings = JSON.parse(
+          localStorage.getItem("candidatesSettings") || "{}"
+        );
+        break;
+      case "stations":
+        settings = JSON.parse(localStorage.getItem("stationsSettings") || "{}");
+        break;
+    }
+
+    if (settings) {
+      this.programFrame.contentWindow.postMessage(
+        {
+          action: "updateSettings",
+          settings: settings,
+        },
+        "*"
+      );
+      log("Template-indstillinger sendt til program");
+    }
   }
 
   /**
@@ -138,11 +194,12 @@ class ProgramManager {
       !this.programFrame.contentWindow ||
       !this.isOnAir
     ) {
-      log("Program frame ikke tilgængelig for dataopdatering", "warning");
+      log("Program update skipped - not on air or frame not ready", "debug");
       return;
     }
 
     // Send message to iframe with the new data
+    log("Sending data to program - isOnAir: " + this.isOnAir, "debug");
     this.programFrame.contentWindow.postMessage(
       {
         action: "opdaterData",
@@ -195,17 +252,15 @@ class ProgramManager {
   setOnAir(status) {
     this.isOnAir = status;
 
-    // Update visual indicator (find parent element with correct class)
-    if (this.programFrame) {
-      const parent =
-        this.programFrame.closest(".visning-frame") ||
-        this.programFrame.parentNode;
-      if (parent) {
-        if (status) {
-          parent.classList.add("on-air");
-        } else {
-          parent.classList.remove("on-air");
-        }
+    // Update visual indicator
+    const programContainer = document.querySelector(
+      ".visning-container:nth-child(2) .visning-frame"
+    );
+    if (programContainer) {
+      if (status) {
+        programContainer.classList.add("on-air");
+      } else {
+        programContainer.classList.remove("on-air");
       }
     }
 
@@ -222,9 +277,7 @@ class ProgramManager {
     const statusIndicator = document.getElementById("statusIndicator");
     const statusText = document.getElementById("statusText");
 
-    if (!statusIndicator || !statusText) {
-      return; // Elements not found, can happen in display mode
-    }
+    if (!statusIndicator || !statusText) return;
 
     if (this.isOnAir && this.activeTemplate) {
       statusIndicator.className = "status-indicator status-online";
@@ -289,12 +342,9 @@ class ProgramManager {
    */
   takeOffAir() {
     this.setOnAir(false);
-
-    // Clear the frame
     if (this.programFrame) {
       this.programFrame.src = "about:blank";
     }
-
     this.activeTemplate = null;
     log("Program taget af luften");
   }

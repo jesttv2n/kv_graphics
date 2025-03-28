@@ -57,30 +57,26 @@ class TransitionManager {
    * @param {string} type - Transition type (cut, fade, push, wipe)
    */
   executeTransition(type) {
-    // Get current preview template
-    const templateName = this.previewManager.getCurrentTemplate();
-
-    if (!templateName) {
-      log("Ingen aktiv preview template at overgå fra", "warning");
+    if (!currentSelectedTemplate) {
+      log("No template selected for transition", "warning");
       return;
     }
 
-    // Get parameters for the transition
     const params = {
-      kommuneId: this.dataService.getActiveKommuneId(),
-      valgstedId: this.dataService.getActiveValgstedId(),
+      kommuneId: dataService.getActiveKommuneId(),
+      valgstedId: dataService.getActiveValgstedId(),
     };
 
-    // Log the transition
-    log(`Udfører ${type.toUpperCase()} transition fra preview til program`);
+    // Local transition
+    programManager.setTemplate(currentSelectedTemplate, params);
+    programManager.setOnAir(true);
 
-    // Execute local transition
-    this.executeLocalTransition(type, templateName, params);
+    // Now send via Pusher to display
+    dataService.sendTransitionCommand(type, currentSelectedTemplate, params);
 
-    // If control panel, send transition command via Pusher
-    if (this.dataService.isControlPanel) {
-      this.dataService.sendTransitionCommand(type, templateName, params);
-    }
+    log(
+      `Executed ${type} transition with template: ${currentSelectedTemplate}`
+    );
   }
 
   /**

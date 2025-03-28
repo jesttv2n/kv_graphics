@@ -35,10 +35,6 @@
         KV Broadcast System
         <span id="appModeIndicator" class="mode-indicator"></span>
       </h1>
-      <div class="mode-selector">
-        <a href="index.html" class="mode-link">Kontrolpanel</a> |
-        <a href="index.html?mode=display" class="mode-link">Visning</a>
-      </div>
       <div class="status-display">
         <div id="statusIndicator" class="status-indicator status-offline"></div>
         <span id="statusText">Systemet er klar</span>
@@ -139,7 +135,11 @@
             <h2>Templates</h2>
           </div>
           <div class="template-buttons">
-            <button id="templateResults" class="btn-template active">
+            <button
+              id="templateResults"
+              class="btn-template-circle active"
+              title="Valgresultater"
+            >
               <svg
                 viewBox="0 0 24 24"
                 fill="currentColor"
@@ -149,9 +149,12 @@
                   d="M7.5 21H2V9H7.5V21ZM14.75 3H9.25V21H14.75V3ZM22 11H16.5V21H22V11Z"
                 />
               </svg>
-              Valgresultater
             </button>
-            <button id="templateCandidates" class="btn-template">
+            <button
+              id="templateCandidates"
+              class="btn-template-circle"
+              title="Valgte Kandidater"
+            >
               <svg
                 viewBox="0 0 24 24"
                 fill="currentColor"
@@ -161,9 +164,12 @@
                   d="M12 12C14.21 12 16 10.21 16 8C16 5.79 14.21 4 12 4C9.79 4 8 5.79 8 8C8 10.21 9.79 12 12 12ZM12 14C9.33 14 4 15.34 4 18V20H20V18C20 15.34 14.67 14 12 14Z"
                 />
               </svg>
-              Valgte Kandidater
             </button>
-            <button id="templateStations" class="btn-template">
+            <button
+              id="templateStations"
+              class="btn-template-circle"
+              title="Valgstedsresultater"
+            >
               <svg
                 viewBox="0 0 24 24"
                 fill="currentColor"
@@ -173,152 +179,111 @@
                   d="M12 2C6.5 2 2 6.5 2 12S6.5 22 12 22 22 17.5 22 12 17.5 2 12 2M12 10.9C11.39 10.9 10.9 10.39 10.9 9.75S11.39 8.6 12 8.6 13.1 9.11 13.1 9.75 12.61 10.9 12 10.9M12 14C11.39 14 10.9 13.5 10.9 12.86V12.83L11.2 12V12.87C11.2 12.94 11.64 13.03 12 13.03S12.8 12.94 12.8 12.87V12L13.1 12.83V12.86C13.1 13.5 12.61 14 12 14Z"
                 />
               </svg>
-              Valgstedsresultater
             </button>
           </div>
         </div>
 
         <div class="card">
           <div class="card-header">
-            <h2>Område</h2>
-          </div>
-          <div class="area-selection">
-            <div class="input-group">
-              <label for="kommuneSelect">Kommune:</label>
-              <select id="kommuneSelect" class="input-control">
-                <option value="">Vælg kommune...</option>
-                <!-- Kommune-optioner indsættes dynamisk -->
-              </select>
-            </div>
-            <div
-              id="valgstedContainer"
-              class="input-group"
-              style="display: none"
-            >
-              <label for="valgstedSelect">Valgsted:</label>
-              <select id="valgstedSelect" class="input-control">
-                <option value="">Vælg valgsted...</option>
-                <!-- Valgsteds-optioner indsættes dynamisk -->
-              </select>
-            </div>
-          </div>
-        </div>
-
-        <div class="card">
-          <div class="card-header">
-            <h2>Data Indstillinger</h2>
-          </div>
-          <div class="data-settings">
-            <div class="input-row">
-              <button id="btnRefreshData" class="btn btn-primary">
-                <svg
-                  viewBox="0 0 24 24"
-                  fill="currentColor"
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="16"
-                  height="16"
-                >
-                  <path
-                    d="M17.65 6.35C16.2 4.9 14.21 4 12 4C7.58 4 4 7.58 4 12C4 16.42 7.58 20 12 20C15.73 20 18.84 17.45 19.73 14H17.65C16.83 16.33 14.61 18 12 18C8.69 18 6 15.31 6 12C6 8.69 8.69 6 12 6C13.66 6 15.14 6.69 16.22 7.78L13 11H20V4L17.65 6.35Z"
-                  />
-                </svg>
-                Opdater Data
-              </button>
-              <div class="auto-update">
-                <label class="checkbox-container">
-                  <input type="checkbox" id="autoUpdateToggle" checked />
-                  <span class="checkmark"></span>
-                  Auto-opdater
-                </label>
-                <select id="updateInterval" class="input-control-sm">
-                  <option value="10">10 sek</option>
-                  <option value="30" selected>30 sek</option>
-                  <option value="60">1 min</option>
-                  <option value="120">2 min</option>
-                  <option value="300">5 min</option>
-                </select>
-              </div>
-            </div>
-            <div id="templateSpecificSettings" class="template-settings">
-              <!-- Template-specifikke indstillinger indsættes dynamisk baseret på valgt template -->
-            </div>
-          </div>
-        </div>
-
-        <div class="card">
-          <div class="card-header">
-            <h2>Pusher Configuration</h2>
-          </div>
-          <div class="pusher-settings">
-            <div class="input-group">
-              <label for="pusherAppKey">App Key:</label>
-              <input
-                type="text"
-                id="pusherAppKey"
-                class="input-control"
-                value=""
-              />
-            </div>
-            <div class="input-group">
-              <label for="pusherCluster">Cluster:</label>
-              <input
-                type="text"
-                id="pusherCluster"
-                class="input-control"
-                value="eu"
-                placeholder="eu"
-              />
-            </div>
-            <button id="btnSavePusherConfig" class="btn btn-success">
-              Gem Pusher-opsætning
+            <h2>Kommune</h2>
+            <button id="btnRefreshKommuner" class="btn-sm">
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="currentColor"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <path
+                  d="M17.65 6.35C16.2 4.9 14.21 4 12 4C7.58 4 4 7.58 4 12C4 16.42 7.58 20 12 20C15.73 20 18.84 17.45 19.73 14H17.65C16.83 16.33 14.61 18 12 18C8.69 18 6 15.31 6 12C6 8.69 8.69 6 12 6C13.66 6 15.14 6.69 16.22 7.78L13 11H20V4L17.65 6.35Z"
+                />
+              </svg>
+              Opdater
             </button>
           </div>
+          <div id="kommuneButtons" class="kommune-grid">
+            <!-- Kommune-knapper indsættes dynamisk -->
+          </div>
         </div>
 
-        <div class="card">
+        <div id="valgstedSection" class="card" style="display: none">
           <div class="card-header">
-            <h2>CasparCG</h2>
-          </div>
-          <div class="casparcg-settings">
-            <div class="input-group">
-              <label for="casparHost">Host/IP:</label>
-              <input
-                type="text"
-                id="casparHost"
-                class="input-control"
-                value="127.0.0.1"
-              />
-            </div>
-            <div class="input-group">
-              <label for="casparPort">Port:</label>
-              <input
-                type="number"
-                id="casparPort"
-                class="input-control"
-                value="5250"
-              />
-            </div>
-            <div class="input-group">
-              <label for="casparChannel">Kanal:</label>
-              <select id="casparChannel" class="input-control">
-                <option value="1">1</option>
-                <option value="2">2</option>
-                <option value="3">3</option>
-              </select>
-            </div>
-            <button id="btnCasparCG" class="btn btn-success">
-              Send til CasparCG
+            <h2>Valgsted</h2>
+            <button id="btnRefreshValgsteder" class="btn-sm">
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="currentColor"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <path
+                  d="M17.65 6.35C16.2 4.9 14.21 4 12 4C7.58 4 4 7.58 4 12C4 16.42 7.58 20 12 20C15.73 20 18.84 17.45 19.73 14H17.65C16.83 16.33 14.61 18 12 18C8.69 18 6 15.31 6 12C6 8.69 8.69 6 12 6C13.66 6 15.14 6.69 16.22 7.78L13 11H20V4L17.65 6.35Z"
+                />
+              </svg>
+              Opdater
             </button>
           </div>
+          <div class="tabs">
+            <button id="tabSystematic" class="tab active">Systematisk</button>
+            <button id="tabSearch" class="tab">Søgning</button>
+          </div>
+          <div id="systematicContent">
+            <div id="valgstedButtons" class="valgsted-grid">
+              <!-- Valgsted-knapper indsættes dynamisk -->
+            </div>
+          </div>
+          <div id="searchContent" style="display: none">
+            <div class="search-container">
+              <input
+                type="text"
+                id="searchInput"
+                class="search-input"
+                placeholder="Søg efter valgsted..."
+              />
+            </div>
+            <div id="valgstedListe" class="valgsted-liste">
+              <!-- Søgeresultater indsættes her -->
+            </div>
+          </div>
         </div>
 
         <div class="card">
           <div class="card-header">
-            <h2>System Log</h2>
-            <button id="btnClearLog" class="btn-sm btn-danger">Ryd log</button>
+            <h2>Data Opdatering</h2>
           </div>
-          <div id="logContainer" class="log-container">
-            <!-- Log-indhold indsættes dynamisk -->
+          <div class="data-controls">
+            <button id="btnRefreshData" class="btn btn-primary">
+              <svg
+                viewBox="0 0 24 24"
+                fill="currentColor"
+                xmlns="http://www.w3.org/2000/svg"
+                width="16"
+                height="16"
+              >
+                <path
+                  d="M17.65 6.35C16.2 4.9 14.21 4 12 4C7.58 4 4 7.58 4 12C4 16.42 7.58 20 12 20C15.73 20 18.84 17.45 19.73 14H17.65C16.83 16.33 14.61 18 12 18C8.69 18 6 15.31 6 12C6 8.69 8.69 6 12 6C13.66 6 15.14 6.69 16.22 7.78L13 11H20V4L17.65 6.35Z"
+                />
+              </svg>
+              Opdater Data
+            </button>
+            <div class="auto-update">
+              <label class="checkbox-container">
+                <input type="checkbox" id="autoUpdateToggle" checked />
+                <span class="checkmark"></span>
+                Auto-opdater
+              </label>
+              <select id="updateInterval" class="input-control-sm">
+                <option value="10">10 sek</option>
+                <option value="30" selected>30 sek</option>
+                <option value="60">1 min</option>
+                <option value="120">2 min</option>
+                <option value="300">5 min</option>
+              </select>
+            </div>
+          </div>
+          <div id="templateSpecificSettings" class="template-settings">
+            <!-- Template-specifikke indstillinger indsættes dynamisk -->
           </div>
         </div>
       </div>
@@ -350,24 +315,22 @@
               <span class="info-label">Sidste opdatering:</span>
               <span id="lastUpdate" class="info-value">-</span>
             </div>
-          </div>
-        </div>
-
-        <div class="card connection-status">
-          <div class="card-header">
-            <h2>Forbindelsesstatus</h2>
-          </div>
-          <div class="info-panel">
             <div class="info-item">
-              <span class="info-label">Pusher:</span>
+              <span class="info-label">Pusher Status:</span>
               <span id="pusherStatus" class="info-value connection-offline"
                 >Ikke forbundet</span
               >
             </div>
-            <div class="info-item">
-              <span class="info-label">Tilsluttede enheder:</span>
-              <span id="connectedClients" class="info-value">0</span>
-            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <h2>System Log</h2>
+            <button id="btnClearLog" class="btn-sm btn-danger">Ryd log</button>
+          </div>
+          <div id="logContainer" class="log-container">
+            <!-- Log-indhold indsættes dynamisk -->
           </div>
         </div>
       </div>

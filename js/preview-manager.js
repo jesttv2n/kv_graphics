@@ -13,7 +13,6 @@ class PreviewManager {
     // Initialize
     this.init();
   }
-
   /**
    * Initialize the preview manager
    */
@@ -30,8 +29,8 @@ class PreviewManager {
       fullscreenBtn.addEventListener("click", () => this.openFullscreen());
     }
 
-    // Listen for template changes
-    document.addEventListener("templateChanged", (event) => {
+    // Listen for template changes - MODIFIED LINE
+    document.addEventListener("previewTemplateChanged", (event) => {
       this.setTemplate(event.detail.template);
     });
 
@@ -114,7 +113,47 @@ class PreviewManager {
     // Add a load event handler
     this.previewFrame.onload = () => {
       log(`Preview template ${this.activeTemplate} indlæst korrekt`);
+
+      // Send template settings if available
+      this.sendTemplateSettings();
     };
+  }
+
+  /**
+   * Send template settings to the preview viewer
+   */
+  sendTemplateSettings() {
+    if (!this.previewFrame || !this.previewFrame.contentWindow) {
+      return;
+    }
+
+    // Get template-specific settings from localStorage
+    let settings = null;
+
+    switch (this.activeTemplate) {
+      case "results":
+        settings = JSON.parse(localStorage.getItem("resultsSettings") || "{}");
+        break;
+      case "candidates":
+        settings = JSON.parse(
+          localStorage.getItem("candidatesSettings") || "{}"
+        );
+        break;
+      case "stations":
+        settings = JSON.parse(localStorage.getItem("stationsSettings") || "{}");
+        break;
+    }
+
+    if (settings) {
+      this.previewFrame.contentWindow.postMessage(
+        {
+          action: "updateSettings",
+          settings: settings,
+        },
+        "*"
+      );
+      log("Template-indstillinger sendt til preview");
+    }
   }
 
   /**

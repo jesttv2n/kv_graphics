@@ -3,188 +3,265 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Skaleret Display Viewer</title>
+    <title>Scaled Display Viewer</title>
     <style>
       body,
       html {
         margin: 0;
         padding: 0;
+        overflow: hidden;
         width: 100%;
         height: 100%;
-        overflow: hidden;
-        background: #000;
+        background-color: #000;
       }
 
-      .container {
-        position: relative;
+      .display-container {
+        position: absolute;
+        top: 0;
+        left: 0;
         width: 100%;
         height: 100%;
         display: flex;
         justify-content: center;
         align-items: center;
-        background-color: #000;
-      }
-
-      .scaled-frame {
-        width: 1920px;
-        height: 1080px;
-        transform-origin: center;
-        position: relative;
         overflow: hidden;
       }
 
-      iframe {
+      .content-wrapper {
+        position: absolute;
+        width: 1920px; /* Original width */
+        height: 1080px; /* Original height */
+        transform-origin: center;
+        overflow: hidden;
+      }
+
+      .template-frame {
         width: 100%;
         height: 100%;
         border: none;
-        background-color: #00407a;
       }
 
       .resolution-indicator {
         position: absolute;
-        bottom: 5px;
-        right: 5px;
+        bottom: 10px;
+        right: 10px;
         background-color: rgba(0, 0, 0, 0.7);
         color: white;
-        padding: 3px 6px;
-        border-radius: 3px;
-        font-size: 10px;
-        z-index: 10;
-      }
-
-      .controls {
-        position: absolute;
-        top: 0;
-        left: 0;
-        right: 0;
-        height: 30px;
-        background-color: rgba(0, 0, 0, 0.6);
-        display: flex;
-        align-items: center;
-        justify-content: flex-end;
-        padding: 0 10px;
-        opacity: 0;
-        transition: opacity 0.3s;
-        z-index: 20;
-      }
-
-      .container:hover .controls {
-        opacity: 1;
-      }
-
-      .control-button {
-        background: transparent;
-        border: none;
-        color: white;
-        padding: 3px 8px;
-        cursor: pointer;
+        padding: 5px 10px;
+        border-radius: 4px;
         font-size: 12px;
-        margin-left: 10px;
+        z-index: 100;
       }
 
-      .control-button:hover {
-        background-color: rgba(255, 255, 255, 0.2);
-        border-radius: 3px;
+      .viewer-type {
+        position: absolute;
+        top: 10px;
+        left: 10px;
+        background-color: rgba(0, 0, 0, 0.7);
+        color: white;
+        padding: 5px 10px;
+        border-radius: 4px;
+        font-size: 12px;
+        z-index: 100;
+      }
+
+      .on-air {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        background-color: #ff3b30;
+        color: white;
+        padding: 5px 10px;
+        border-radius: 4px;
+        font-size: 12px;
+        font-weight: bold;
+        z-index: 100;
+        display: none;
+      }
+
+      /* Show on-air label only when viewer type is 'program' */
+      body[data-viewer="program"] .on-air {
+        display: block;
       }
     </style>
   </head>
   <body>
-    <div class="container">
-      <div class="scaled-frame" id="scaledFrame">
-        <iframe id="displayFrame" src="about:blank"></iframe>
+    <div class="display-container">
+      <div class="content-wrapper" id="contentWrapper">
+        <iframe
+          id="templateFrame"
+          class="template-frame"
+          src="about:blank"
+        ></iframe>
         <div class="resolution-indicator">1920×1080</div>
-      </div>
-      <div class="controls">
-        <button class="control-button" id="refreshBtn">Opdater</button>
-        <button class="control-button" id="fullscreenBtn">Fuld skærm</button>
+        <div class="viewer-type" id="viewerType">Preview</div>
+        <div class="on-air">PÅ LUFTEN</div>
       </div>
     </div>
 
     <script>
-      // Element references
-      const container = document.querySelector(".container");
-      const scaledFrame = document.getElementById("scaledFrame");
-      const displayFrame = document.getElementById("displayFrame");
-      const refreshBtn = document.getElementById("refreshBtn");
-      const fullscreenBtn = document.getElementById("fullscreenBtn");
+      // State
+      let state = {
+        viewer: "preview", // 'preview' or 'program'
+        template: "results", // 'results', 'candidates', 'stations'
+        kommuneId: 860,
+        valgstedId: null,
+        data: null,
+        settings: {},
+      };
 
-      // Get URL parameters
-      function getUrlParam(name) {
+      // Get parameters from URL
+      function getUrlParams() {
         const urlParams = new URLSearchParams(window.location.search);
-        return urlParams.get(name);
+
+        state.viewer = urlParams.get("viewer") || "preview";
+        state.template = urlParams.get("template") || "results";
+        state.kommuneId = urlParams.get("kommune") || null;
+        state.valgstedId = urlParams.get("valgsted") || null;
+
+        // Set viewer type for styling
+        document.body.setAttribute("data-viewer", state.viewer);
+
+        // Update viewer type display
+        const viewerTypeEl = document.getElementById("viewerType");
+        if (viewerTypeEl) {
+          viewerTypeEl.textContent =
+            state.viewer === "program" ? "Program" : "Preview";
+        }
       }
 
-      // Initialize with parameters
-      function init() {
-        // Check for display mode parameters
-        const template = getUrlParam("template") || "results";
-        const kommune = getUrlParam("kommune");
-        const valgsted = getUrlParam("valgsted");
-        const viewerType = getUrlParam("viewer") || "preview";
+      // Load template
+      function loadTemplate() {
+        const templateFrame = document.getElementById("templateFrame");
+        if (!templateFrame) return;
 
-        // Build URL for the display
-        let displayUrl = "display.html?mode=display";
+        // Construct template URL
+        let url = `views/${state.template}.html`;
 
-        if (template) {
-          displayUrl += `&template=${template}`;
+        // Add parameters
+        let params = [];
+        if (state.kommuneId) {
+          params.push(`kommune=${state.kommuneId}`);
         }
 
-        if (kommune) {
-          displayUrl += `&kommune=${kommune}`;
+        if (state.template === "stations" && state.valgstedId) {
+          params.push(`valgsted=${state.valgstedId}`);
         }
 
-        if (valgsted && template === "stations") {
-          displayUrl += `&valgsted=${valgsted}`;
+        if (params.length > 0) {
+          url += `?${params.join("&")}`;
         }
 
-        // Load the display
-        displayFrame.src = displayUrl;
-
-        // Set scaling based on container size
-        adjustScale();
-
-        // Set up window resize listener
-        window.addEventListener("resize", adjustScale);
-
-        // Set up buttons
-        refreshBtn.addEventListener("click", () => {
-          displayFrame.src = displayFrame.src;
-        });
-
-        fullscreenBtn.addEventListener("click", () => {
-          if (container.requestFullscreen) {
-            container.requestFullscreen();
-          } else if (container.webkitRequestFullscreen) {
-            container.webkitRequestFullscreen();
-          } else if (container.msRequestFullscreen) {
-            container.msRequestFullscreen();
-          }
-        });
-
-        // Message passing
-        window.addEventListener("message", (event) => {
-          // Forward messages to the display iframe
-          if (displayFrame.contentWindow && event.data) {
-            displayFrame.contentWindow.postMessage(event.data, "*");
-          }
-        });
+        // Load the template
+        templateFrame.src = url;
       }
 
-      // Adjust scale to fit container
+      // Adjust scaling
       function adjustScale() {
+        const container = document.querySelector(".display-container");
+        const wrapper = document.getElementById("contentWrapper");
+
+        if (!container || !wrapper) return;
+
+        // Get container dimensions
         const containerWidth = container.clientWidth;
         const containerHeight = container.clientHeight;
 
-        // Calculate scale factor (minimum of width or height ratio)
+        // Calculate scale (maintain aspect ratio)
         const scaleX = containerWidth / 1920;
         const scaleY = containerHeight / 1080;
         const scale = Math.min(scaleX, scaleY);
 
-        // Apply scale
-        scaledFrame.style.transform = `scale(${scale})`;
+        // Apply scale transformation
+        wrapper.style.transform = `scale(${scale})`;
       }
 
-      // Initialize when DOM is ready
+      // Handle messages from parent window
+      function setupMessageListener() {
+        window.addEventListener("message", (event) => {
+          // For security, you might want to check event.origin
+
+          const { action, payload, settings } = event.data;
+
+          if (action === "opdaterData" && payload) {
+            // Forward data to template
+            const templateFrame = document.getElementById("templateFrame");
+            if (templateFrame && templateFrame.contentWindow) {
+              templateFrame.contentWindow.postMessage(
+                {
+                  action: "opdaterData",
+                  payload: payload,
+                },
+                "*"
+              );
+            }
+
+            // Save data for future use
+            state.data = payload;
+          } else if (action === "updateSettings" && settings) {
+            // Forward settings to template
+            const templateFrame = document.getElementById("templateFrame");
+            if (templateFrame && templateFrame.contentWindow) {
+              templateFrame.contentWindow.postMessage(
+                {
+                  action: "updateSettings",
+                  settings: settings,
+                },
+                "*"
+              );
+            }
+
+            // Save settings for future use
+            state.settings = settings;
+          }
+        });
+      }
+
+      // Initialize
+      function init() {
+        // Get parameters
+        getUrlParams();
+
+        // Adjust scaling initially and on resize
+        adjustScale();
+        window.addEventListener("resize", adjustScale);
+
+        // Setup message listener
+        setupMessageListener();
+
+        // Load template
+        loadTemplate();
+
+        // Listen for template iframe load
+        const templateFrame = document.getElementById("templateFrame");
+        if (templateFrame) {
+          templateFrame.addEventListener("load", () => {
+            // If we have data to send immediately
+            if (state.data) {
+              templateFrame.contentWindow.postMessage(
+                {
+                  action: "opdaterData",
+                  payload: state.data,
+                },
+                "*"
+              );
+            }
+
+            // If we have settings to apply
+            if (state.settings && Object.keys(state.settings).length > 0) {
+              templateFrame.contentWindow.postMessage(
+                {
+                  action: "updateSettings",
+                  settings: state.settings,
+                },
+                "*"
+              );
+            }
+          });
+        }
+      }
+
+      // Run initialization
       document.addEventListener("DOMContentLoaded", init);
     </script>
   </body>

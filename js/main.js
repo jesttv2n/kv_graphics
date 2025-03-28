@@ -34,6 +34,10 @@ function initApp() {
   // Initialize UI based on mode
   if (isControlPanel) {
     initControlPanelUI();
+    // Add this: Set default kommune after UI initialization
+    setTimeout(() => {
+      selectKommune("860"); // Default to kommune 860 (Hjørring)
+    }, 100); // Small delay to ensure UI is ready
   } else {
     initDisplayUI();
   }
@@ -121,14 +125,8 @@ function initDisplayUI() {
  * Initialize control panel components
  */
 function initControlComponents() {
-  // Populate kommune dropdown
-  const kommuneSelect = el("kommuneSelect");
-  kommuner.forEach((kommune) => {
-    const option = document.createElement("option");
-    option.value = kommune.id;
-    option.textContent = kommune.navn;
-    kommuneSelect.appendChild(option);
-  });
+  // Setup kommune buttons grid
+  initializeKommuneButtons();
 
   // Add event listeners for template buttons
   el("templateResults").addEventListener("click", () =>
@@ -141,62 +139,127 @@ function initControlComponents() {
     selectTemplate("stations")
   );
 
-  // Add event listener for kommune select
-  kommuneSelect.addEventListener("change", function () {
-    const kommuneId = this.value;
-    if (kommuneId) {
-      selectKommune(kommuneId);
-    }
-  });
+  // Set up valgsted tab system
+  setupValgstedTabs();
 
   // Add event listeners for data controls
   el("btnRefreshData").addEventListener("click", manualDataRefresh);
   el("autoUpdateToggle").addEventListener("change", toggleAutoUpdate);
   el("updateInterval").addEventListener("change", changeUpdateInterval);
+  el("btnRefreshKommuner").addEventListener("click", handleRefreshKommuner);
 
   // Add event listeners for log controls
   el("btnClearLog").addEventListener("click", () => {
     el("logContainer").innerHTML = "";
     log("Log ryddet");
   });
+}
 
-  // Add event listener for CasparCG send button
-  el("btnCasparCG").addEventListener("click", sendToCasparCG);
+/**
+ * Initialize kommune buttons grid
+ */
+function initializeKommuneButtons() {
+  const kommuneButtonsEl = el("kommuneButtons");
+  kommuneButtonsEl.innerHTML = "";
+
+  // Sort alphabetically by default
+  const sortedKommuner = [...kommuner].sort((a, b) =>
+    a.navn.localeCompare(b.navn)
+  );
+
+  sortedKommuner.forEach((kommune) => {
+    const button = document.createElement("button");
+    button.textContent = kommune.navn;
+    button.dataset.id = kommune.id;
+    button.addEventListener("click", () => {
+      selectKommune(kommune.id);
+    });
+    kommuneButtonsEl.appendChild(button);
+  });
+
+  log(`Kommuneknapper initialiseret: ${sortedKommuner.length} kommuner`);
+}
+
+/**
+ * Set up valgsted tabs and search functionality
+ */
+function setupValgstedTabs() {
+  el("tabSystematic").addEventListener("click", () => {
+    el("tabSystematic").classList.add("active");
+    el("tabSearch").classList.remove("active");
+    el("systematicContent").style.display = "block";
+    el("searchContent").style.display = "none";
+  });
+
+  el("tabSearch").addEventListener("click", () => {
+    el("tabSearch").classList.add("active");
+    el("tabSystematic").classList.remove("active");
+    el("systematicContent").style.display = "none";
+    el("searchContent").style.display = "block";
+    el("searchInput").focus();
+  });
+
+  // Set up search function
+  el("searchInput").addEventListener("input", (e) => {
+    updateValgstedListe(e.target.value);
+  });
+
+  // Setup valgsted refresh button
+  el("btnRefreshValgsteder").addEventListener("click", () => {
+    populateValgstedGrid();
+    updateValgstedListe();
+    log("Valgstedsliste opdateret");
+  });
 }
 
 /**
  * Select a template
  * @param {string} templateName - Template to select
  */
+// First, declare this variable at the module/global scope
+// (outside the function, somewhere at the top of your file)
+let currentSelectedTemplate = "results"; // Initialize with default
+
+// Then your function
 function selectTemplate(templateName) {
   // Update UI to show active template
-  document.querySelectorAll(".btn-template").forEach((btn) => {
+  document.querySelectorAll(".btn-template-circle").forEach((btn) => {
     btn.classList.remove("active");
   });
   el(
     `template${templateName.charAt(0).toUpperCase() + templateName.slice(1)}`
   ).classList.add("active");
 
-  // Show/hide valgsted selector based on template
-  const valgstedContainer = el("valgstedContainer");
+  // Show/hide valgsted section based on template
+  const valgstedSection = el("valgstedSection");
   const valgstedInfo = el("valgstedInfo");
 
   if (templateName === "stations") {
-    valgstedContainer.style.display = "block";
+    valgstedSection.style.display = "block";
     valgstedInfo.style.display = "block";
-    populateValgstedDropdown();
+    populateValgstedGrid();
+
+    // Add this: Set default valgsted for the current kommune
+    const kommuneId = dataService.getActiveKommuneId();
+    if (kommuneId) {
+      const valgsteder = getValgstederForKommune(kommuneId);
+      if (valgsteder && valgsteder.length > 0) {
+        // Select the first valgsted by default
+        selectValgsted(valgsteder[0].id);
+      }
+    }
   } else {
-    valgstedContainer.style.display = "none";
+    valgstedSection.style.display = "none";
     valgstedInfo.style.display = "none";
   }
 
   // Dispatch event to notify the system locally
-  dispatchCustomEvent("templateChanged", { template: templateName });
+  dispatchCustomEvent("previewTemplateChanged", { template: templateName });
 
-  // Send via Pusher
-  dataService.sendTemplateChange(templateName);
+  // Store the template choice for later use during transition
+  currentSelectedTemplate = templateName;
 
-  log(`Template ændret til: ${templateName}`);
+  log(`Preview template ændret til: ${templateName}`);
 }
 
 /**
@@ -204,15 +267,20 @@ function selectTemplate(templateName) {
  * @param {string} kommuneId - Kommune ID to select
  */
 function selectKommune(kommuneId) {
+  // Update UI - highlight selected kommune button
+  document.querySelectorAll("#kommuneButtons button").forEach((btn) => {
+    btn.classList.toggle("active", btn.dataset.id === kommuneId);
+  });
+
   // Set active kommune in dataservice
   dataService.setActiveKommune(kommuneId);
 
-  // Update UI
+  // Update UI info display
   el("currentKommune").textContent = getKommuneNavn(kommuneId);
 
-  // If stations template is active, populate valgsted dropdown
+  // If stations template is active, populate valgsted grid
   if (previewManager.getCurrentTemplate() === "stations") {
-    populateValgstedDropdown();
+    populateValgstedGrid();
   }
 
   // Fetch data for the selected kommune
@@ -220,30 +288,89 @@ function selectKommune(kommuneId) {
 }
 
 /**
- * Populate valgsted dropdown for selected kommune
+ * Populate valgsted buttons grid for selected kommune
  */
-function populateValgstedDropdown() {
+function populateValgstedGrid() {
   const kommuneId = dataService.getActiveKommuneId();
   if (!kommuneId) return;
 
-  const valgstedSelect = el("valgstedSelect");
-  valgstedSelect.innerHTML = '<option value="">Vælg valgsted...</option>';
+  const valgstedGrid = el("valgstedButtons");
+  valgstedGrid.innerHTML = "";
 
-  const valgsteder = getValgstederForKommune(kommuneId);
-  valgsteder.forEach((valgsted) => {
-    const option = document.createElement("option");
-    option.value = valgsted.id;
-    option.textContent = valgsted.navn;
-    valgstedSelect.appendChild(option);
+  const kommuneValgsteder = getValgstederForKommune(kommuneId);
+
+  log(
+    `Initialiserer valgstedknapper: Fandt ${kommuneValgsteder.length} valgsteder for kommune ${kommuneId}`
+  );
+
+  if (kommuneValgsteder.length === 0) {
+    valgstedGrid.innerHTML =
+      '<div class="empty-state">Ingen valgsteder fundet for denne kommune.</div>';
+    return;
+  }
+
+  kommuneValgsteder.forEach((valgsted) => {
+    const button = document.createElement("button");
+    button.textContent = valgsted.navn;
+    button.dataset.id = valgsted.id;
+    button.addEventListener("click", () => {
+      selectValgsted(valgsted.id);
+    });
+    valgstedGrid.appendChild(button);
   });
 
-  // Add event listener
-  valgstedSelect.onchange = function () {
-    const valgstedId = this.value;
-    if (valgstedId) {
-      selectValgsted(valgstedId);
+  // Also update search list
+  updateValgstedListe();
+}
+
+/**
+ * Update the valgsted search list
+ * @param {string} searchTerm - Search term (optional)
+ */
+function updateValgstedListe(searchTerm = "") {
+  const kommuneId = dataService.getActiveKommuneId();
+  if (!kommuneId) return;
+
+  const valgstedListeEl = el("valgstedListe");
+  valgstedListeEl.innerHTML = "";
+
+  const kommuneValgsteder = getValgstederForKommune(kommuneId);
+
+  if (kommuneValgsteder.length === 0) {
+    valgstedListeEl.innerHTML =
+      '<div class="empty-state">Ingen valgsteder fundet for denne kommune.</div>';
+    return;
+  }
+
+  // Filter valgsteder based on search term
+  const filteredValgsteder = searchTerm
+    ? kommuneValgsteder.filter((v) =>
+        v.navn.toLowerCase().includes(searchTerm.toLowerCase())
+      )
+    : kommuneValgsteder;
+
+  if (filteredValgsteder.length === 0) {
+    valgstedListeEl.innerHTML =
+      '<div class="empty-state">Ingen valgsteder matcher søgningen.</div>';
+    return;
+  }
+
+  filteredValgsteder.forEach((valgsted) => {
+    const item = document.createElement("div");
+    item.className = "valgsted-item";
+    item.textContent = valgsted.navn;
+    item.dataset.id = valgsted.id;
+
+    if (valgsted.id === dataService.getActiveValgstedId()) {
+      item.classList.add("active");
     }
-  };
+
+    item.addEventListener("click", () => {
+      selectValgsted(valgsted.id);
+    });
+
+    valgstedListeEl.appendChild(item);
+  });
 }
 
 /**
@@ -251,15 +378,28 @@ function populateValgstedDropdown() {
  * @param {string} valgstedId - Valgsted ID to select
  */
 function selectValgsted(valgstedId) {
+  const kommuneId = dataService.getActiveKommuneId();
+  const valgstedNavn = getValgstedNavn(kommuneId, valgstedId);
+
+  // Update UI - highlight selected valgsted items
+  document.querySelectorAll("#valgstedButtons button").forEach((btn) => {
+    btn.classList.toggle("active", btn.dataset.id === valgstedId);
+  });
+
+  document.querySelectorAll(".valgsted-item").forEach((item) => {
+    item.classList.toggle("active", item.dataset.id === valgstedId);
+  });
+
   // Set active valgsted in dataservice
   dataService.setActiveValgsted(valgstedId);
 
-  // Update UI
-  const valgstedNavn = getValgstedNavn(
-    dataService.getActiveKommuneId(),
-    valgstedId
-  );
+  // Update UI info display
   el("currentValgsted").textContent = valgstedNavn;
+
+  // Important addition: Check if current template is stations, and if so, refresh preview
+  if (previewManager.getCurrentTemplate() === "stations") {
+    previewManager.refreshPreview(); // Refresh preview to show the new valgsted
+  }
 
   // Fetch data for the valgsted
   dataService
@@ -270,6 +410,8 @@ function selectValgsted(valgstedId) {
     .catch((error) => {
       log(`Fejl: ${error.message}`, "error");
     });
+
+  log(`Skiftet til valgsted: ${valgstedNavn} (ID: ${valgstedId})`);
 }
 
 /**
@@ -410,38 +552,11 @@ function changeUpdateInterval() {
 }
 
 /**
- * Send to CasparCG
+ * Handle refresh kommuner button
  */
-function sendToCasparCG() {
-  const host = el("casparHost").value;
-  const port = el("casparPort").value;
-  const channel = el("casparChannel").value;
-
-  const kommune = getKommuneNavn(dataService.getActiveKommuneId());
-  const template = previewManager.getCurrentTemplate();
-  let templateName = "";
-
-  switch (template) {
-    case "results":
-      templateName = "Valgresultater";
-      break;
-    case "candidates":
-      templateName = "Valgte Kandidater";
-      break;
-    case "stations":
-      templateName = "Valgstedsresultater";
-      break;
-  }
-
-  // This would be implemented for a real CasparCG setup
-  log(
-    `Sender til CasparCG (${host}:${port}): ${templateName} for ${kommune} på kanal ${channel}`
-  );
-
-  // Simulate success
-  setTimeout(() => {
-    log(`CasparCG bekræftelse modtaget`, "info");
-  }, 500);
+function handleRefreshKommuner() {
+  initializeKommuneButtons();
+  log("Kommuneliste opdateret");
 }
 
 // Initialize application when DOM content loaded
