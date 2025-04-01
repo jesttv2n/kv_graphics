@@ -9,11 +9,12 @@
 .visualization-container {
   width: 1920px;
   height: 1080px;
-  position: relative;
+  position: fixed;
+  top: 0;
+  left: 0;
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  background-color: #00407a;
   color: white;
   font-family: "Segoe UI", Roboto, Oxygen, Ubuntu, "Open Sans", sans-serif;
   z-index: 20;
@@ -259,74 +260,89 @@
   color: #aaa;
 }
 
-/* Party list styles */
+/* Forbedrede party list styles med adaptive support */
 .parti-liste {
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: var(--parti-gap, 16px);
+  overflow: hidden; /* Sikrer at indholdet ikke overløber */
+  padding-right: 10px; /* Giver lidt plads på højresiden */
 }
 
 .parti {
   display: flex;
   align-items: center;
-  height: 60px;
+  height: var(
+    --parti-height,
+    60px
+  ); /* Default højde, kan overskrives dynamisk */
   opacity: 0;
   transform: translateY(10px);
   animation: fadeInUp 0.5s ease-out forwards;
-  transition: opacity 0.3s ease-in-out, transform 0.3s ease-in-out;
+  transition: opacity 0.3s ease-in-out, transform 0.3s ease-in-out,
+    height 0.3s ease-in-out;
 }
 
 .parti-info {
   width: 400px;
   display: flex;
   align-items: center;
+  min-width: 250px; /* Sikrer at partinavne stadig har plads */
+  flex-shrink: 0; /* Forhindrer at info-delen bliver for lille */
 }
 
 .parti-bogstav {
-  width: 60px;
-  height: 60px;
+  width: var(--bogstav-size, 60px);
+  height: var(--bogstav-size, 60px);
+  min-width: var(--bogstav-size, 60px);
   border-radius: 50%;
   display: flex;
   justify-content: center;
   align-items: center;
-  font-size: 30px;
+  font-size: var(--bogstav-font, 30px);
   font-weight: bold;
   margin-right: 20px;
   text-transform: uppercase;
+  flex-shrink: 0; /* Forhindrer at bogstav-cirklen bliver mast */
 }
 
 .parti-navn {
-  font-size: 24px;
+  font-size: var(--parti-font, 24px);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  transition: font-size 0.3s ease-in-out;
 }
 
 .parti-procent {
   width: 200px;
-  font-size: 26px;
+  min-width: 150px;
+  font-size: var(--data-font, 26px);
   font-weight: bold;
   text-align: right;
   padding-right: 10px;
   transition: all 0.5s ease-in-out;
+  flex-shrink: 0; /* Forhindrer at procent-delen bliver mast */
 }
 
-.parti-mandater,
 .parti-stemmer {
   width: 200px;
-  font-size: 24px;
+  min-width: 150px;
+  font-size: var(--data-font, 24px);
   text-align: right;
   padding-right: 10px;
   transition: all 0.5s ease-in-out;
+  flex-shrink: 0; /* Forhindrer at stemmetallet bliver mast */
 }
 
 .bar-container {
   flex: 1;
-  height: 40px;
+  height: var(--bar-height, 40px);
   background-color: rgba(255, 255, 255, 0.1);
   border-radius: 20px;
   overflow: hidden;
+  min-width: 100px; /* Sikrer at bar'en stadig er synlig */
 }
 
 .bar {
@@ -336,9 +352,89 @@
   border-radius: 20px;
 }
 
-/* Animation for data changes */
+/* Difference indicators med bedre spacing */
+.difference {
+  display: inline-block;
+  font-size: 0.85em;
+  padding-left: 5px;
+  transition: color 0.3s;
+  white-space: nowrap;
+}
+
+/* CSS variabler til forskellige parti-tætheder */
+.parti-liste.density-normal {
+  --parti-height: 60px;
+  --parti-gap: 16px;
+  --parti-font: 24px;
+  --data-font: 24px;
+  --bar-height: 40px;
+  --bogstav-size: 60px;
+  --bogstav-font: 30px;
+}
+
+.parti-liste.density-medium {
+  --parti-height: 50px;
+  --parti-gap: 12px;
+  --parti-font: 20px;
+  --data-font: 20px;
+  --bar-height: 30px;
+  --bogstav-size: 50px;
+  --bogstav-font: 24px;
+}
+
+.parti-liste.density-compact {
+  --parti-height: 40px;
+  --parti-gap: 8px;
+  --parti-font: 18px;
+  --data-font: 18px;
+  --bar-height: 25px;
+  --bogstav-size: 40px;
+  --bogstav-font: 20px;
+}
+
+.parti-liste.density-very-compact {
+  --parti-height: 35px;
+  --parti-gap: 6px;
+  --parti-font: 16px;
+  --data-font: 16px;
+  --bar-height: 20px;
+  --bogstav-size: 35px;
+  --bogstav-font: 18px;
+}
+
+/* Animation for data changes - gjort mere synlig */
 .parti-data-change {
   animation: highlight 1.5s ease-in-out;
+}
+
+/* Station-specific styles */
+.valgsted-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 20px;
+  background-color: rgba(0, 0, 0, 0.2);
+  border-radius: 10px;
+  margin-bottom: 15px;
+}
+
+.valgsted-navn {
+  font-size: 24px;
+  font-weight: bold;
+}
+
+.valgsted-status {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.valgsted-deltagelse,
+.valgsted-stemmer {
+  font-size: 20px;
+  background-color: rgba(255, 255, 255, 0.1);
+  padding: 5px 15px;
+  border-radius: 20px;
 }
 
 @keyframes highlight {
@@ -346,7 +442,7 @@
     background-color: rgba(255, 255, 255, 0);
   }
   50% {
-    background-color: rgba(255, 255, 255, 0.2);
+    background-color: rgba(255, 255, 255, 0.25);
   }
   100% {
     background-color: rgba(255, 255, 255, 0);
@@ -390,53 +486,150 @@
   left: 0;
   width: 100%;
   height: 100%;
-  background-color: rgba(0, 64, 122, 0.5);
+  background-color: rgba(0, 64, 122, 0.75);
   z-index: 2;
 }
 
-/* Elected candidates specific styles */
+/* Fikset CSS til kolonnebaseret kandidatvisning */
+
+/* Hovedcontainer med flex-wrap layout */
 .kandidat-container {
   display: flex;
+  flex-direction: column;
   flex-wrap: wrap;
-  gap: 30px;
-  padding: 0 10px;
-  overflow-y: auto;
-  height: 100%;
+  height: calc(
+    100vh - 300px
+  ); /* Juster denne værdi baseret på din faktiske header+footer højde */
+  width: 100%;
   align-content: flex-start;
+  gap: var(--container-gap, 20px);
+  overflow: hidden; /* Ingen scroll */
+  position: relative;
+  padding: 0 10px;
 }
 
+/* Parti-gruppe styling - med adaptive bredde */
 .parti-gruppe {
-  width: 440px;
-  margin-bottom: 30px;
+  width: var(--group-width, 440px);
+  max-height: 100%; /* Må ikke være højere end containeren */
+  margin-bottom: var(--group-margin, 20px);
   opacity: 0;
   transform: translateY(20px);
   animation: fadeInUp 0.5s ease-out forwards;
 }
 
+/* Tilpas bredden for partier med flere kolonner kandidater */
+.parti-gruppe.many-candidates {
+  width: var(--many-group-width, 660px);
+}
+
+.parti-gruppe.very-many-candidates {
+  width: var(--very-many-group-width, 880px);
+}
+
+/* Ved meget kompakte visninger kan partier blive smallere */
+.density-compact .parti-gruppe {
+  width: var(--group-width, 380px);
+}
+.density-compact .parti-gruppe.many-candidates {
+  width: var(--many-group-width, 580px);
+}
+.density-compact .parti-gruppe.very-many-candidates {
+  width: var(--very-many-group-width, 880px);
+}
+
+.density-very-compact .parti-gruppe {
+  width: var(--group-width, 320px);
+}
+.density-very-compact .parti-gruppe.many-candidates {
+  width: var(--many-group-width, 520px);
+}
+.density-very-compact .parti-gruppe.very-many-candidates {
+  width: var(--very-many-group-width, 880px);
+}
+
+/* Parti-header styling */
 .parti-header {
   display: flex;
   align-items: center;
-  margin-bottom: 15px;
+  margin-bottom: var(--header-margin, 15px);
   background-color: rgba(0, 0, 0, 0.3);
   border-radius: 10px;
-  padding: 10px 15px;
+  padding: var(--header-padding, 10px 15px);
 }
 
+.parti-bogstav {
+  width: var(--letter-size, 40px);
+  height: var(--letter-size, 40px);
+  min-width: var(--letter-size, 40px);
+  border-radius: 50%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-size: var(--letter-font, 22px);
+  font-weight: bold;
+  margin-right: var(--letter-margin, 15px);
+  flex-shrink: 0;
+}
+
+.parti-navn {
+  flex: 1;
+  font-size: var(--name-font, 20px);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.parti-mandater {
+  font-size: var(--seats-font, 18px);
+  background-color: rgba(255, 255, 255, 0.15);
+  padding: 4px 8px;
+  border-radius: 4px;
+  margin: 0px 10px;
+  white-space: nowrap;
+  width: 200px;
+  min-width: 150px;
+  text-align: right;
+  transition: all 0.5s ease-in-out;
+  flex-shrink: 0; /* Forhindrer at stemmetallet bliver mast */
+}
+
+/* Kandidater liste - standard layout og multi-kolonne layout */
+.kandidater-liste {
+  display: flex;
+  flex-direction: column;
+  gap: var(--candidate-gap, 10px);
+}
+
+/* For partier med mange kandidater, brug CSS grid i stedet for flex eller columns */
+.parti-gruppe.many-candidates .kandidater-liste {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  grid-gap: var(--candidate-gap, 10px);
+}
+
+/* Ved ekstremt høje kandidattal, brug 3 kolonner */
+.parti-gruppe.very-many-candidates .kandidater-liste {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+/* Kandidat styling */
 .kandidat {
   display: flex;
   align-items: center;
   background-color: rgba(255, 255, 255, 0.1);
   border-radius: 8px;
-  padding: 10px;
-  margin-bottom: 10px;
+  padding: var(--candidate-padding, 10px);
+  min-height: var(--candidate-height, 60px);
   transition: all 0.3s ease;
 }
 
 .kandidat-foto {
-  width: 64px;
-  height: 64px;
+  width: var(--photo-size, 50px);
+  height: var(--photo-size, 50px);
+  min-width: var(--photo-size, 50px);
   border-radius: 50%;
-  margin-right: 15px;
+  margin-right: var(--photo-margin, 15px);
   background-size: cover;
   background-position: center;
   border: 2px solid white;
@@ -444,33 +637,42 @@
   display: flex;
   justify-content: center;
   align-items: center;
-  font-size: 24px;
+  font-size: var(--photo-font, 20px);
   color: #ccc;
+  flex-shrink: 0;
 }
 
 .kandidat-info {
   flex: 1;
+  min-width: 0; /* Tillader text-overflow at virke */
+  overflow: hidden;
 }
 
 .kandidat-navn {
-  font-size: 18px;
+  font-size: var(--candidate-name-font, 16px);
   font-weight: bold;
-  margin-bottom: 5px;
+  margin-bottom: 3px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .kandidat-detaljer {
-  font-size: 14px;
+  font-size: var(--candidate-details-font, 14px);
   opacity: 0.8;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .kandidat-stemmer {
   font-weight: bold;
   background-color: rgba(255, 255, 255, 0.15);
-  padding: 4px 8px;
+  padding: 3px 6px;
   border-radius: 4px;
-  margin-left: 15px;
-  min-width: 70px;
-  text-align: right;
+  margin-left: 10px;
+  font-size: var(--votes-font, 14px);
+  white-space: nowrap;
 }
 
 /* Borgmester styling */
@@ -489,10 +691,134 @@
   color: black;
   padding: 2px 8px;
   border-radius: 10px;
-  font-size: 12px;
+  font-size: var(--mayor-tag-font, 12px);
   font-weight: bold;
 }
 
+/* Forskellige tæthedsklasser baseret på antal kandidater */
+.kandidat-container.density-normal {
+  --container-gap: 20px;
+  --group-width: 440px;
+  --many-group-width: 660px;
+  --very-many-group-width: 880px;
+  --group-margin: 20px;
+  --header-margin: 15px;
+  --header-padding: 10px 15px;
+  --letter-size: 40px;
+  --letter-font: 22px;
+  --letter-margin: 15px;
+  --name-font: 20px;
+  --seats-font: 18px;
+  --candidate-padding: 10px;
+  --candidate-gap: 10px;
+  --candidate-height: 60px;
+  --photo-size: 50px;
+  --photo-margin: 15px;
+  --photo-font: 20px;
+  --candidate-name-font: 16px;
+  --candidate-details-font: 14px;
+  --votes-font: 14px;
+  --mayor-tag-font: 12px;
+}
+
+.kandidat-container.density-medium {
+  --container-gap: 15px;
+  --group-width: 380px;
+  --many-group-width: 580px;
+  --very-many-group-width: 880px;
+  --group-margin: 15px;
+  --header-margin: 12px;
+  --header-padding: 8px 12px;
+  --letter-size: 36px;
+  --letter-font: 20px;
+  --letter-margin: 12px;
+  --name-font: 18px;
+  --seats-font: 16px;
+  --candidate-padding: 8px;
+  --candidate-gap: 8px;
+  --candidate-height: 50px;
+  --photo-size: 40px;
+  --photo-margin: 12px;
+  --photo-font: 18px;
+  --candidate-name-font: 15px;
+  --candidate-details-font: 13px;
+  --votes-font: 13px;
+  --mayor-tag-font: 11px;
+}
+
+.kandidat-container.density-compact {
+  --container-gap: 10px;
+  --group-width: 340px;
+  --many-group-width: 520px;
+  --very-many-group-width: 880px;
+  --group-margin: 10px;
+  --header-margin: 8px;
+  --header-padding: 6px 10px;
+  --letter-size: 32px;
+  --letter-font: 18px;
+  --letter-margin: 10px;
+  --name-font: 16px;
+  --seats-font: 14px;
+  --candidate-padding: 6px;
+  --candidate-gap: 6px;
+  --candidate-height: 45px;
+  --photo-size: 36px;
+  --photo-margin: 10px;
+  --photo-font: 16px;
+  --candidate-name-font: 14px;
+  --candidate-details-font: 12px;
+  --votes-font: 12px;
+  --mayor-tag-font: 10px;
+}
+
+.kandidat-container.density-very-compact {
+  --container-gap: 8px;
+  --group-width: 320px;
+  --many-group-width: 480px;
+  --very-many-group-width: 880px;
+  --group-margin: 8px;
+  --header-margin: 6px;
+  --header-padding: 4px 8px;
+  --letter-size: 28px;
+  --letter-font: 16px;
+  --letter-margin: 8px;
+  --name-font: 14px;
+  --seats-font: 13px;
+  --candidate-padding: 4px;
+  --candidate-gap: 4px;
+  --candidate-height: 40px;
+  --photo-size: 32px;
+  --photo-margin: 8px;
+  --photo-font: 14px;
+  --candidate-name-font: 13px;
+  --candidate-details-font: 11px;
+  --votes-font: 11px;
+  --mayor-tag-font: 9px;
+}
+
+/* Animation keyframes */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Ingen data besked */
+.no-data {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100px;
+  background-color: rgba(0, 0, 0, 0.3);
+  border-radius: 10px;
+  font-size: 18px;
+  width: 100%;
+}
 /* CasparCG metadata - hidden */
 .meta {
   display: none;

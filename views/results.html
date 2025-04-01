@@ -341,9 +341,12 @@
         const partyList = el("partyList");
         partyList.innerHTML = "";
 
-        // Sort parties based on settings
-        let sortedParties = [...parties];
+        // Filter out parties with no votes if we have many parties
+        let sortedParties = [...parties].filter(
+          (p) => p.votesPercentage > 0 || p.votes > 0
+        );
 
+        // Sort parties based on settings
         if (settings.sortByVotes) {
           sortedParties.sort((a, b) => b.votesPercentage - a.votesPercentage);
         } else {
@@ -355,10 +358,20 @@
           });
         }
 
-        // Limit number of parties if specified
-        if (settings.partyLimit > 0) {
-          sortedParties = sortedParties.slice(0, settings.partyLimit);
+        // Determine density class based on number of parties
+        const totalParties = sortedParties.length;
+        let densityClass = "density-normal";
+
+        if (totalParties > 10 && totalParties <= 14) {
+          densityClass = "density-medium";
+        } else if (totalParties > 14 && totalParties <= 18) {
+          densityClass = "density-compact";
+        } else if (totalParties > 18) {
+          densityClass = "density-very-compact";
         }
+
+        // Apply the density class to the container
+        partyList.className = `parti-liste ${densityClass}`;
 
         // Create elements for each party
         sortedParties.forEach((party, index) => {
@@ -372,43 +385,25 @@
             typeof party.votesPercentage === "number"
               ? party.votesPercentage.toFixed(1)
               : "0.0";
-          const seats = typeof party.seats === "number" ? party.seats : 0;
           const color = farve(letter);
 
           // Create container
           const partyContainer = document.createElement("div");
-          partyContainer.className = "party-bar-container";
+          partyContainer.className = "parti";
           partyContainer.style.animationDelay = `${index * 100}ms`;
 
-          // Create bar
-          const bar = document.createElement("div");
-          bar.className = "party-bar";
-          bar.style.backgroundColor = color;
-          bar.style.width = "0%";
-          partyContainer.appendChild(bar);
-
-          // Create content
-          const content = document.createElement("div");
-          content.className = "party-content";
-
-          // Party label (letter + name)
-          const label = document.createElement("div");
-          label.className = "party-label";
-          label.innerHTML = `
-                    <div class="party-letter" style="background-color: ${color}">${letter}</div>
-                    <div class="party-name">${name}</div>
-                `;
-          content.appendChild(label);
-
-          // Party values (percentage, change, seats)
-          const values = document.createElement("div");
-          values.className = "party-values";
+          // Create party info
+          const partyInfo = document.createElement("div");
+          partyInfo.className = "parti-info";
+          partyInfo.innerHTML = `
+      <div class="parti-bogstav" style="background-color: ${color}">${letter}</div>
+      <div class="parti-navn">${name}</div>
+    `;
 
           // Percentage
           const percentageEl = document.createElement("div");
-          percentageEl.className = "party-percentage";
+          percentageEl.className = "parti-procent";
           percentageEl.textContent = `${percentage}%`;
-          values.appendChild(percentageEl);
 
           // Change from previous election
           if (
@@ -416,41 +411,77 @@
             typeof party.votesPercentageChange === "number"
           ) {
             const change = party.votesPercentageChange;
-            const changeEl = document.createElement("div");
-            changeEl.className = "party-change";
+            let changeText = "";
+            let changeClass = "neutral";
 
-            // Determine class based on change
             if (change > 0) {
-              changeEl.classList.add("change-positive");
-              changeEl.textContent = `+${change.toFixed(1)}`;
+              changeText = `+${change.toFixed(1)}`;
+              changeClass = "positive";
             } else if (change < 0) {
-              changeEl.classList.add("change-negative");
-              changeEl.textContent = `${change.toFixed(1)}`;
+              changeText = `${change.toFixed(1)}`;
+              changeClass = "negative";
             } else {
-              changeEl.classList.add("change-neutral");
-              changeEl.textContent = "±0.0";
+              changeText = "±0.0";
             }
 
-            values.appendChild(changeEl);
+            const diffSpan = document.createElement("span");
+            diffSpan.className = `difference ${changeClass}`;
+            diffSpan.textContent = `(${changeText})`;
+            percentageEl.appendChild(diffSpan);
           }
 
-          // Seats
-          const seatsEl = document.createElement("div");
-          seatsEl.className = "party-seats";
-          seatsEl.textContent = `${seats} ${
+          // Mandates
+          const mandatesEl = document.createElement("div");
+          mandatesEl.className = "parti-mandater";
+
+          const seats = typeof party.seats === "number" ? party.seats : 0;
+          mandatesEl.textContent = `${seats} ${
             seats === 1 ? "mandat" : "mandater"
           }`;
-          values.appendChild(seatsEl);
 
-          content.appendChild(values);
-          partyContainer.appendChild(content);
+          if (typeof party.seatsChange === "number") {
+            const seatsChange = party.seatsChange;
+            let changeText = "";
+            let changeClass = "neutral";
+
+            if (seatsChange > 0) {
+              changeText = `+${seatsChange}`;
+              changeClass = "positive";
+            } else if (seatsChange < 0) {
+              changeText = `${seatsChange}`;
+              changeClass = "negative";
+            } else {
+              changeText = "±0";
+            }
+
+            const diffSpan = document.createElement("span");
+            diffSpan.className = `difference ${changeClass}`;
+            diffSpan.textContent = `(${changeText})`;
+            mandatesEl.appendChild(diffSpan);
+          }
+
+          // Bar container
+          const barContainer = document.createElement("div");
+          barContainer.className = "bar-container";
+
+          const bar = document.createElement("div");
+          bar.className = "bar";
+          bar.style.backgroundColor = color;
+          bar.style.width = "0%";
+          barContainer.appendChild(bar);
+
+          // Assemble party row
+          partyContainer.appendChild(partyInfo);
+          partyContainer.appendChild(percentageEl);
+          partyContainer.appendChild(mandatesEl);
+          partyContainer.appendChild(barContainer);
 
           // Add to DOM
           partyList.appendChild(partyContainer);
 
           // Animate bar width after a short delay
           setTimeout(() => {
-            bar.style.width = `${Math.min(100, parseFloat(percentage) * 2)}%`;
+            bar.style.width = `${Math.min(100, parseFloat(percentage))}%`;
           }, 100 + index * 50);
         });
       }

@@ -289,6 +289,194 @@
       }
 
       /**
+       * Sammenligner to datasæt og returnerer en liste af ændringer
+       * med sammenligning til kommuneniveau
+       */
+      function findDataChanges(oldData, newData, kommuneData) {
+        if (!oldData || !oldData.parties || !newData || !newData.parties)
+          return [];
+
+        const changes = [];
+
+        // Map oldData partier for lettere opslag
+        const oldParties = {};
+        oldData.parties.forEach((party) => {
+          oldParties[party.letter || party.abbreviation] = party;
+        });
+
+        // Map kommuneData partier hvis det findes
+        const kommuneParties = {};
+        if (kommuneData && kommuneData.parties) {
+          kommuneData.parties.forEach((party) => {
+            kommuneParties[party.letter || party.abbreviation] = party;
+          });
+        }
+
+        // Tjek hver parti i nydata
+        newData.parties.forEach((newParty) => {
+          const letter = newParty.letter || newParty.abbreviation;
+          const oldParty = oldParties[letter];
+          const kommuneParty = kommuneParties[letter];
+
+          // Grundlæggende ændringsdetektion
+          const change = {
+            partyLetter: letter,
+            percentChange: false,
+            votesChange: false,
+            compareToMunicipality: false,
+          };
+
+          // Tjek om procenter eller stemmer er ændret fra sidste opdatering
+          if (oldParty) {
+            if (oldParty.votesPercentage !== newParty.votesPercentage) {
+              change.percentChange = true;
+            }
+
+            if (oldParty.votes !== newParty.votes) {
+              change.votesChange = true;
+            }
+          }
+
+          // Sammenlign med kommunedata hvis det er tilgængeligt
+          if (kommuneParty) {
+            change.compareToMunicipality = true;
+
+            // Beregn forskellen mellem valgstedets procent og kommunens procent
+            const stationPercent = newParty.votesPercentage || 0;
+            const kommunePercent = kommuneParty.votesPercentage || 0;
+            const diff = stationPercent - kommunePercent;
+
+            // Kategoriser forskellen
+            change.comparisonDiff = diff.toFixed(1);
+            change.comparisonHigher = diff > 0.5;
+            change.comparisonLower = diff < -0.5;
+            change.comparisonSame = Math.abs(diff) <= 0.5;
+          }
+
+          // Tilføj ændringen til listen hvis der er nogen ændringer
+          if (
+            change.percentChange ||
+            change.votesChange ||
+            change.compareToMunicipality
+          ) {
+            changes.push(change);
+          }
+        });
+
+        return changes;
+      }
+
+      /**
+       * Opdater eksisterende partiliste ved at ændre værdierne og animere ændrede værdier
+       * @param {Array} partier - Liste af partier
+       * @param {Array} changes - Liste af ændringer
+       * @param {Object} kommuneData - Kommunedata til sammenligning (valgfrit)
+       */
+      function opdaterPartiListe(partier, changes, kommuneData) {
+        // Find alle eksisterende parti-elementer
+        const partiElements = document.querySelectorAll(".parti");
+        if (!partiElements.length) return;
+
+        // Sorter partier efter stemmeprocent
+        const sortedPartier = (partier || []).sort(
+          (a, b) => b.votesPercentage - a.votesPercentage
+        );
+
+        // Få kommunepartier for sammenligning hvis tilgængelige
+        const kommuneParties = {};
+        if (kommuneData && kommuneData.parties) {
+          kommuneData.parties.forEach((party) => {
+            kommuneParties[party.letter || party.abbreviation] = party;
+          });
+        }
+
+        // Opdater hvert parti-element
+        partiElements.forEach((partiElement, index) => {
+          if (index >= sortedPartier.length) return;
+
+          const parti = sortedPartier[index];
+          const partiLetter = partiElement.dataset.letter;
+
+          // Find procent og stemmer elementer
+          const procentElement = partiElement.querySelector(".parti-procent");
+          const stemmerElement = partiElement.querySelector(".parti-stemmer");
+          const barElement = partiElement.querySelector(".bar");
+
+          if (!procentElement || !stemmerElement || !barElement) return;
+
+          // Tjek om dette parti har ændringer
+          const hasChanges = changes.find((c) => c.partyLetter === partiLetter);
+
+          // Opdater værdierne
+          const procent =
+            typeof parti.votesPercentage === "number"
+              ? parti.votesPercentage.toFixed(1)
+              : "0.0";
+
+          const stemmer = parti.votes || 0;
+
+          // Opdater procent
+          procentElement.textContent = `${procent}%`;
+
+          // Tilføj sammenligning med kommunen hvis tilgængelig
+          const kommuneParty = kommuneParties[partiLetter];
+          if (kommuneParty && hasChanges && hasChanges.compareToMunicipality) {
+            const diff = hasChanges.comparisonDiff;
+            let comparisonClass = "same";
+            let arrowSymbol = "⟷";
+
+            if (hasChanges.comparisonHigher) {
+              comparisonClass = "higher";
+              arrowSymbol = "↑";
+            } else if (hasChanges.comparisonLower) {
+              comparisonClass = "lower";
+              arrowSymbol = "↓";
+            }
+
+            // Tilføj eller opdater sammenligningselement
+            let comparisonEl = procentElement.querySelector(
+              ".comparison-indicator"
+            );
+            if (!comparisonEl) {
+              comparisonEl = document.createElement("span");
+              comparisonEl.className = `comparison-indicator ${comparisonClass}`;
+              procentElement.appendChild(comparisonEl);
+            } else {
+              comparisonEl.className = `comparison-indicator ${comparisonClass}`;
+            }
+
+            comparisonEl.innerHTML = `
+        <span class="comparison-arrow">${arrowSymbol}</span>
+        <span class="comparison-text">${diff > 0 ? "+" : ""}${diff}%</span>
+      `;
+          }
+
+          // Opdater stemmer
+          stemmerElement.textContent = `${formatNumber(stemmer)} stemmer`;
+
+          // Opdater søjle
+          barElement.style.width = `${Math.min(100, parseFloat(procent) * 2)}%`;
+
+          // Tilføj highlight animation til ændrede elementer
+          if (hasChanges) {
+            if (hasChanges.percentChange) {
+              procentElement.classList.add("parti-data-change");
+              setTimeout(() => {
+                procentElement.classList.remove("parti-data-change");
+              }, 1500);
+            }
+
+            if (hasChanges.votesChange) {
+              stemmerElement.classList.add("parti-data-change");
+              setTimeout(() => {
+                stemmerElement.classList.remove("parti-data-change");
+              }, 1500);
+            }
+          }
+        });
+      }
+
+      /**
        * Fetch data from APIs
        */
       async function fetchData() {
@@ -380,7 +568,7 @@
       }
 
       /**
-       * Render party list
+       * Render party list adaptively for polling station results
        * @param {Array} parties - List of parties
        */
       function renderPartyList(parties) {
@@ -388,30 +576,28 @@
         const partyList = el("partyList");
         partyList.innerHTML = "";
 
-        // Get kommune parties for comparison if needed
-        const kommuneParties = {};
-        if (
-          settings.compareToMunicipality &&
-          state.kommuneData &&
-          state.kommuneData.parties
-        ) {
-          state.kommuneData.parties.forEach((party) => {
-            const letter = party.letter || party.abbreviation;
-            if (letter) {
-              kommuneParties[letter.toLowerCase()] = party;
-            }
-          });
-        }
-
-        // Sort parties by votes percentage
-        let sortedParties = [...parties].sort(
-          (a, b) => (b.votesPercentage || 0) - (a.votesPercentage || 0)
+        // Filter out parties with no votes if we have many parties
+        let sortedParties = [...parties].filter(
+          (p) => p.votesPercentage > 0 || p.votes > 0
         );
 
-        // Limit number of parties if specified
-        if (settings.partyLimit > 0) {
-          sortedParties = sortedParties.slice(0, settings.partyLimit);
+        // Sort parties based on settings
+        sortedParties.sort((a, b) => b.votesPercentage - a.votesPercentage);
+
+        // Determine density class based on number of parties
+        const totalParties = sortedParties.length;
+        let densityClass = "density-normal";
+
+        if (totalParties > 10 && totalParties <= 14) {
+          densityClass = "density-medium";
+        } else if (totalParties > 14 && totalParties <= 18) {
+          densityClass = "density-compact";
+        } else if (totalParties > 18) {
+          densityClass = "density-very-compact";
         }
+
+        // Apply the density class to the container
+        partyList.className = `parti-liste ${densityClass}`;
 
         // Create elements for each party
         sortedParties.forEach((party, index) => {
@@ -421,120 +607,63 @@
             ""
           ).toUpperCase();
           const name = party.name || "Ukendt";
-          const color = farve(letter);
           const percentage =
             typeof party.votesPercentage === "number"
               ? party.votesPercentage.toFixed(1)
               : "0.0";
-          const votes = party.votes || 0;
+          const votes = party.votesGiven || 0;
+          const color = farve(letter);
 
-          // Check if we have kommune data for comparison
-          let comparison = null;
-          const letterKey = letter.toLowerCase();
-          if (settings.compareToMunicipality && kommuneParties[letterKey]) {
-            const kommunePercentage =
-              kommuneParties[letterKey].votesPercentage || 0;
-            const diff = (party.votesPercentage || 0) - kommunePercentage;
+          // Create container
+          const partyContainer = document.createElement("div");
+          partyContainer.className = "parti";
+          partyContainer.style.animationDelay = `${index * 100}ms`;
 
-            comparison = {
-              diff: diff,
-              higher: diff > 0.5,
-              lower: diff < -0.5,
-              same: Math.abs(diff) <= 0.5,
-            };
-          }
+          // Create party info
+          const partyInfo = document.createElement("div");
+          partyInfo.className = "parti-info";
+          partyInfo.innerHTML = `
+      <div class="parti-bogstav" style="background-color: ${color}">${letter}</div>
+      <div class="parti-navn">${name}</div>
+    `;
 
-          // Create party row
-          const partyRow = document.createElement("div");
-          partyRow.className = "party-row";
-          partyRow.style.animationDelay = `${index * 100}ms`;
+          // Percentage
+          const percentageEl = document.createElement("div");
+          percentageEl.className = "parti-procent";
+          percentageEl.textContent = `${percentage}%`;
 
-          // Party identity
-          const identity = document.createElement("div");
-          identity.className = "party-identity";
-          identity.innerHTML = `
-                    <div class="party-letter" style="background-color: ${color}">${letter}</div>
-                    <div class="party-name">${name}</div>
-                `;
+          // Votes count (instead of seats)
+          const votesEl = document.createElement("div");
+          votesEl.className = "parti-stemmer";
+          votesEl.textContent = `${formatNumber(votes)} stemmer`;
 
-          // Party stats
-          const stats = document.createElement("div");
-          stats.className = "party-stats";
+          // Bar container
+          const barContainer = document.createElement("div");
+          barContainer.className = "bar-container";
 
-          // Percentage stat
-          const percentStat = document.createElement("div");
-          percentStat.className = "stat-container";
-          percentStat.innerHTML = `
-                    <div class="stat-label">Procent</div>
-                    <div class="stat-value">${percentage}%</div>
-                `;
-
-          // Votes stat (if enabled)
-          let votesStat = null;
-          if (settings.showVoteCounts) {
-            votesStat = document.createElement("div");
-            votesStat.className = "stat-container";
-            votesStat.innerHTML = `
-                        <div class="stat-label">Stemmer</div>
-                        <div class="stat-value">${formatNumber(votes)}</div>
-                    `;
-          }
-
-          // Votes bar
-          const votesBar = document.createElement("div");
-          votesBar.className = "votes-bar";
-
-          const votesProgress = document.createElement("div");
-          votesProgress.className = "votes-progress";
-          votesProgress.style.backgroundColor = color;
-          votesProgress.style.width = "0%";
-          votesBar.appendChild(votesProgress);
-
-          // Comparison indicator (if enabled)
-          let comparisonEl = null;
-          if (comparison) {
-            comparisonEl = document.createElement("div");
-            comparisonEl.className = "comparison-indicator";
-
-            let arrowClass = "same";
-            let arrowSymbol = "⟷";
-            let diffText = "samme niveau";
-
-            if (comparison.higher) {
-              arrowClass = "higher";
-              arrowSymbol = "↑";
-              diffText = `+${comparison.diff.toFixed(1)}%`;
-            } else if (comparison.lower) {
-              arrowClass = "lower";
-              arrowSymbol = "↓";
-              diffText = `${comparison.diff.toFixed(1)}%`;
-            }
-
-            comparisonEl.innerHTML = `
-                        <span class="comparison-arrow ${arrowClass}">${arrowSymbol}</span>
-                        <span class="comparison-text">${diffText}</span>
-                    `;
-          }
+          const bar = document.createElement("div");
+          bar.className = "bar";
+          bar.style.backgroundColor = color;
+          bar.style.width = "0%";
+          barContainer.appendChild(bar);
 
           // Assemble party row
-          partyRow.appendChild(identity);
-          stats.appendChild(percentStat);
-          if (votesStat) stats.appendChild(votesStat);
-          stats.appendChild(votesBar);
-          if (comparisonEl) stats.appendChild(comparisonEl);
-          partyRow.appendChild(stats);
+          partyContainer.appendChild(partyInfo);
+          partyContainer.appendChild(percentageEl);
+          partyContainer.appendChild(votesEl);
+          partyContainer.appendChild(barContainer);
 
           // Add to DOM
-          partyList.appendChild(partyRow);
+          partyList.appendChild(partyContainer);
 
           // Animate bar width after a short delay
           setTimeout(() => {
-            votesProgress.style.width = `${Math.min(
-              100,
-              parseFloat(percentage) * 2
-            )}%`;
+            bar.style.width = `${Math.min(100, parseFloat(percentage) * 2)}%`;
           }, 100 + index * 50);
         });
+
+        // Log the number of parties for debugging
+        console.log(`Rendered ${totalParties} parties for polling station.`);
       }
 
       // Initialize when DOM is loaded
