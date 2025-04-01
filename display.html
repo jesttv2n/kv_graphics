@@ -380,36 +380,106 @@
        * @param {Object} params - Parameters
        */
       function executeTransition(type, template, params) {
-        const frame = document.getElementById("programFrame");
+        const container = document.querySelector(".display-container");
+        const currentFrame = document.getElementById("programFrame");
 
-        if (type === "fade") {
-          // Apply fade effect
-          frame.style.transition = "opacity 1s ease-in-out";
-          frame.style.opacity = 0;
-
-          setTimeout(() => {
-            loadTemplate(template, params);
-
-            // Fade back in
-            setTimeout(() => {
-              frame.style.opacity = 1;
-
-              // Reset transition after animation complete
-              setTimeout(() => {
-                frame.style.transition = "";
-              }, 1000);
-            }, 50);
-          }, 1000);
-        } else if (type === "cut") {
+        if (type === "cut") {
           // Just load the template immediately
           loadTemplate(template, params);
-        } else {
-          // For other transitions, use fade as fallback
-          log(
-            `Transition type '${type}' not fully implemented, using fade instead`
-          );
-          executeTransition("fade", template, params);
+          return;
         }
+
+        // For any other transition type, perform a dissolve transition
+        log(`Starter dissolve transition til ${template}...`);
+
+        // Show loading indicator during preparation
+        const loadingIndicator = document.querySelector(".initial-loader");
+        if (loadingIndicator) {
+          loadingIndicator.textContent = "Forbereder transition...";
+          loadingIndicator.style.display = "none"; // Vi viser ikke loaderen, da den vil forstyrre visningen
+        }
+
+        // Create a new iframe that will hold the new content
+        const newFrame = document.createElement("iframe");
+        newFrame.className = "program-frame";
+        newFrame.style.opacity = "0";
+        newFrame.style.transition = "opacity 1s ease-in-out";
+        newFrame.style.position = "absolute";
+        newFrame.style.top = "0";
+        newFrame.style.left = "0";
+        newFrame.style.width = "100%";
+        newFrame.style.height = "100%";
+        newFrame.style.border = "none";
+        newFrame.style.zIndex = "5"; // Sæt den over den gamle iframe
+
+        // Construct URL for the new template
+        let url;
+        switch (template) {
+          case "results":
+            url = `views/results.html${
+              params.kommuneId ? `?kommune=${params.kommuneId}` : ""
+            }`;
+            break;
+          case "candidates":
+            url = `views/candidates.html${
+              params.kommuneId ? `?kommune=${params.kommuneId}` : ""
+            }`;
+            break;
+          case "stations":
+            url = `views/stations.html?kommune=${
+              params.kommuneId || ""
+            }&valgsted=${params.valgstedId || ""}`;
+            break;
+          default:
+            log(`Ukendt template: ${template}`, "error");
+            return;
+        }
+
+        // Prepare currentFrame for transition
+        currentFrame.style.transition = "opacity 1s ease-in-out";
+
+        // Add the new frame to the DOM
+        container.appendChild(newFrame);
+
+        // Set source for the new frame
+        newFrame.src = url;
+
+        // Wait for the new frame to load before starting the transition
+        newFrame.onload = function () {
+          log(`Ny template ${template} indlæst - starter dissolve sekvens`);
+
+          // Start the synchronized transition
+          // First, a small delay to ensure the browser is ready
+          setTimeout(() => {
+            // Begin fade out of current and fade in of new simultaneously
+            requestAnimationFrame(() => {
+              currentFrame.style.opacity = "0";
+              newFrame.style.opacity = "1";
+
+              log(`Dissolve i gang...`);
+            });
+
+            // When animation is complete, clean up
+            setTimeout(() => {
+              // Remove original frame
+              container.removeChild(currentFrame);
+
+              // Make the new frame the main programFrame
+              newFrame.id = "programFrame";
+
+              // Reset transition styling
+              newFrame.style.position = "";
+              newFrame.style.zIndex = "";
+
+              log(`Dissolve transition komplet for ${template}`);
+            }, 1100); // Lidt længere end transition varigheden for sikkerhed
+          }, 50); // Kort forsinkelse inden opstart
+        };
+
+        // Log at processen er begyndt
+        log(
+          `Dissolve transition påbegyndt - venter på indlæsning af ${template}`
+        );
       }
 
       /**
