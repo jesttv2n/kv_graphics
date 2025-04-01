@@ -135,7 +135,7 @@
 }
 
 .visning-frame.on-air::before {
-  content: "PÅ LUFTEN";
+  content: "ON AIR";
   position: absolute;
   top: 10px;
   right: 10px;
