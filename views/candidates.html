@@ -223,6 +223,7 @@
 
     <script src="../js/utils/common.js"></script>
     <script src="../js/utils/party-colors.js"></script>
+    <script src="../js/utils/mock-data.js"></script>
     <script>
       // Configuration
       let settings = {
@@ -625,6 +626,70 @@
 
       // Initialize when DOM is loaded
       document.addEventListener("DOMContentLoaded", initialize);
+    </script>
+    <!-- Add this to all three template HTML files just below the closing </div> of the visualization-container -->
+    <div
+      id="mockDataIndicator"
+      style="
+        display: none;
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        background-color: rgba(255, 193, 7, 0.9);
+        color: black;
+        padding: 8px 15px;
+        border-radius: 5px;
+        font-size: 14px;
+        font-weight: bold;
+        z-index: 1000;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+      "
+    >
+      <div style="display: flex; align-items: center">
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          width="16"
+          height="16"
+          viewBox="0 0 24 24"
+          style="margin-right: 8px; fill: currentColor"
+        >
+          <path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z" />
+        </svg>
+        <span>TESTVISNING MED FIKTIVE DATA</span>
+      </div>
+    </div>
+
+    <script>
+      // Listen for messages from the iframe content
+      window.addEventListener("message", function (event) {
+        if (
+          event.data &&
+          event.data.action === "mockDataStatus" &&
+          event.data.status === "active"
+        ) {
+          // Show mock data indicator
+          const indicator = document.getElementById("mockDataIndicator");
+          if (indicator) {
+            indicator.style.display = "block";
+          }
+
+          // Log to console for debugging
+          console.log("Using mock data due to API unavailability", event.data);
+        }
+      });
+
+      // Function to check if we're using mock data directly
+      function checkMockDataStatus() {
+        if (window.usingMockData) {
+          const indicator = document.getElementById("mockDataIndicator");
+          if (indicator) {
+            indicator.style.display = "block";
+          }
+        }
+      }
+
+      // Check after DOM loads
+      document.addEventListener("DOMContentLoaded", checkMockDataStatus);
     </script>
   </body>
 </html>

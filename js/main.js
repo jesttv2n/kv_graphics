@@ -64,6 +64,7 @@ function initApp() {
     // Setup auto-update for control panel
     initAutoUpdate();
   }
+  initMockDataToggle();
 
   // Log system ready
   log("KV Broadcast System er klar til brug");
@@ -482,6 +483,106 @@ function updateDataDisplay(data) {
   if (data.lastUpdated) {
     const dato = new Date(data.lastUpdated);
     el("lastUpdate").textContent = dato.toLocaleTimeString("da-DK");
+  }
+}
+
+/**
+ * Add this script to your main.js file to add a toggle button for mock data
+ */
+
+/**
+ * Initialize mock data toggle button
+ * This function adds a button to the control panel to enable/disable mock data
+ */
+function initMockDataToggle() {
+  // Create the toggle button
+  const toggleButton = document.createElement("button");
+  toggleButton.id = "toggleMockData";
+  toggleButton.className = "btn btn-warning";
+  toggleButton.innerHTML = `
+    <svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16" style="margin-right: 8px;">
+      <path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/>
+    </svg>
+    Brug Test Data
+  `;
+
+  // Find a good place to insert the button
+  const dataControls = document.querySelector(".data-controls");
+  if (dataControls) {
+    dataControls.appendChild(toggleButton);
+  }
+
+  // Add event listener
+  toggleButton.addEventListener("click", toggleMockData);
+
+  // Check if mock data is active
+  updateMockDataToggleState();
+}
+
+/**
+ * Toggle mock data on/off
+ */
+function toggleMockData() {
+  // Get current state from localStorage
+  const currentState = localStorage.getItem("useMockData") === "true";
+
+  // Toggle state
+  const newState = !currentState;
+  localStorage.setItem("useMockData", newState.toString());
+
+  // Update button state
+  updateMockDataToggleState();
+
+  // Show notification
+  log(
+    `${newState ? "Aktiveret" : "Deaktiveret"} testdata mode`,
+    newState ? "warning" : "info"
+  );
+
+  // Refresh data to apply changes
+  if (typeof fetchDataForActiveTemplate === "function") {
+    fetchDataForActiveTemplate();
+  }
+}
+
+/**
+ * Update toggle button state based on current setting
+ */
+function updateMockDataToggleState() {
+  const button = document.getElementById("toggleMockData");
+  if (!button) return;
+
+  const isActive = localStorage.getItem("useMockData") === "true";
+
+  if (isActive) {
+    button.classList.add("active");
+    button.textContent = "Bruger Test Data";
+
+    // Set global flag that can be detected by templates
+    window.usingMockData = true;
+
+    // Add indicator to control panel
+    let indicator = document.getElementById("mockDataControlIndicator");
+    if (!indicator) {
+      indicator = document.createElement("div");
+      indicator.id = "mockDataControlIndicator";
+      indicator.style.cssText =
+        "position: fixed; top: 70px; right: 20px; background-color: rgba(255, 193, 7, 0.9); color: black; padding: 5px 10px; border-radius: 4px; font-size: 12px; font-weight: bold; z-index: 1000;";
+      indicator.textContent = "TESTVISNING MED FIKTIVE DATA";
+      document.body.appendChild(indicator);
+    }
+  } else {
+    button.classList.remove("active");
+    button.textContent = "Brug Test Data";
+
+    // Clear global flag
+    window.usingMockData = false;
+
+    // Remove indicator if it exists
+    const indicator = document.getElementById("mockDataControlIndicator");
+    if (indicator) {
+      indicator.remove();
+    }
   }
 }
 
