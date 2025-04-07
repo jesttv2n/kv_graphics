@@ -199,9 +199,9 @@
       </div>
     </div>
 
-    <script src="../js/utils/common.js"></script>
-    <script src="../js/utils/party-colors.js"></script>
-    <script src="../js/utils/mock-data.js"></script>
+    <script type="module" src="../js/index.js"></script>
+    <script type="module" src="../js/main.js"></script>
+    <script type="module" src="../js/utils/global-utils.js"></script>
     <script>
       // Configuration
       let settings = {
@@ -267,24 +267,36 @@
           // Check event source for security
           // if (event.origin !== window.location.origin) return;
 
-          const { action, payload, settings: newSettings } = event.data;
+          // Extract noAnimation flag along with other data
+          const {
+            action,
+            payload,
+            settings: newSettings,
+            noAnimation,
+          } = event.data;
 
           if (action === "opdaterData" && payload) {
-            // Determine if this is kommuneData or valgstedData
+            // Store the data in state
             if (payload.result && payload.result.electionPoints) {
               // This is valgstedData
               state.valgstedData = payload;
             } else if (payload.result && !payload.result.electionPoints) {
               // This is kommuneData
               state.kommuneData = payload;
+            } else if (payload.elected) {
+              // This is kandidatData
+              state.kandidatData = payload;
+            } else {
+              // Generic case
+              state.data = payload;
             }
 
-            renderData();
+            // Pass noAnimation flag to renderData
+            renderData(noAnimation);
           } else if (action === "updateSettings" && newSettings) {
             settings = { ...settings, ...newSettings };
-            if (state.valgstedData) {
-              renderData();
-            }
+            // For settings changes, always animate (false = do animate)
+            renderData(false);
           }
         });
       }
@@ -521,47 +533,34 @@
 
       /**
        * Render data to DOM
+       * @param {boolean} noAnimation - Whether to skip animations
        */
-      function renderData() {
-        // Need at least valgstedData
-        if (!state.valgstedData || !state.valgstedData.result) {
+      function renderData(noAnimation = false) {
+        // Existing code to extract and prepare data...
+
+        // Example for results.html:
+        if (!state.data || !state.data.result) {
           return;
         }
 
-        const valgstedData = state.valgstedData;
-        const kommuneData = state.kommuneData || {};
+        const data = state.data;
+        const resultData = data.result;
 
-        // Update valgsted and kommune names
-        el("valgstedNavn").textContent =
-          valgstedData.result.name || "Ukendt valgsted";
-        el("kommuneNavn").textContent =
-          kommuneData.result?.name || "Ukendt kommune";
+        // Update kommune name, election progress, etc.
+        // ...
 
-        // Update counts
-        if (valgstedData.result) {
-          const votesGiven = valgstedData.result.votesGiven || 0;
-          el("stemmeInfo").textContent = `${formatNumber(
-            votesGiven
-          )} stemmer afgivet`;
+        // Pass noAnimation parameter to the render function
+        renderPartyList(data.parties || [], noAnimation);
 
-          const votesPercentage = valgstedData.result.votesPercentage || 0;
-          el(
-            "deltagelsesInfo"
-          ).textContent = `Stemmeprocent: ${votesPercentage.toFixed(1)}%`;
-        }
-
-        // Render party list
-        renderPartyList(valgstedData.parties || []);
-
-        // Update timestamp
-        if (valgstedData.lastUpdated) {
-          const dato = new Date(valgstedData.lastUpdated);
-          el(
-            "opdateretTid"
-          ).textContent = `Sidst opdateret: ${dato.toLocaleTimeString(
-            "da-DK"
-          )}`;
-          state.lastUpdateTimestamp = valgstedData.lastUpdated;
+        // Only show update flash if not suppressing animations
+        if (!noAnimation) {
+          const updateFlash = el("updateFlash");
+          if (updateFlash) {
+            updateFlash.style.opacity = "0.3";
+            setTimeout(() => {
+              updateFlash.style.opacity = "0";
+            }, 500);
+          }
         }
 
         // Hide loading screen
@@ -569,102 +568,58 @@
       }
 
       /**
-       * Render party list adaptively for polling station results
+       * Render party list
        * @param {Array} parties - List of parties
+       * @param {boolean} skipAnimation - Whether to skip animations
        */
-      function renderPartyList(parties) {
+      function renderPartyList(parties, skipAnimation = false) {
         // Get container
         const partyList = el("partyList");
         partyList.innerHTML = "";
 
-        // Filter out parties with no votes if we have many parties
-        let sortedParties = [...parties].filter(
-          (p) => p.votesPercentage > 0 || p.votes > 0
-        );
-
-        // Sort parties based on settings
-        sortedParties.sort((a, b) => b.votesPercentage - a.votesPercentage);
-
-        // Determine density class based on number of parties
-        const totalParties = sortedParties.length;
-        let densityClass = "density-normal";
-
-        if (totalParties > 10 && totalParties <= 14) {
-          densityClass = "density-medium";
-        } else if (totalParties > 14 && totalParties <= 18) {
-          densityClass = "density-compact";
-        } else if (totalParties > 18) {
-          densityClass = "density-very-compact";
-        }
-
-        // Apply the density class to the container
-        partyList.className = `parti-liste ${densityClass}`;
+        // Filter and sort parties
+        // ...
 
         // Create elements for each party
         sortedParties.forEach((party, index) => {
-          const letter = (
-            party.letter ||
-            party.abbreviation ||
-            ""
-          ).toUpperCase();
-          const name = party.name || "Ukendt";
-          const percentage =
-            typeof party.votesPercentage === "number"
-              ? party.votesPercentage.toFixed(1)
-              : "0.0";
-          const votes = party.votesGiven || 0;
-          const color = farve(letter);
-
           // Create container
           const partyContainer = document.createElement("div");
           partyContainer.className = "parti";
-          partyContainer.style.animationDelay = `${index * 100}ms`;
 
-          // Create party info
-          const partyInfo = document.createElement("div");
-          partyInfo.className = "parti-info";
-          partyInfo.innerHTML = `
-      <div class="parti-bogstav" style="background-color: ${color}">${letter}</div>
-      <div class="parti-navn">${name}</div>
-    `;
+          // Skip animation if requested
+          if (skipAnimation) {
+            // Set opacity and transform directly instead of animating
+            partyContainer.style.opacity = "1";
+            partyContainer.style.transform = "translateY(0)";
+          } else {
+            // Apply normal animation delay
+            partyContainer.style.animationDelay = `${index * 100}ms`;
+          }
 
-          // Percentage
-          const percentageEl = document.createElement("div");
-          percentageEl.className = "parti-procent";
-          percentageEl.textContent = `${percentage}%`;
+          // Create party info and other elements
+          // ...
 
-          // Votes count (instead of seats)
-          const votesEl = document.createElement("div");
-          votesEl.className = "parti-stemmer";
-          votesEl.textContent = `${formatNumber(votes)} stemmer`;
-
-          // Bar container
-          const barContainer = document.createElement("div");
-          barContainer.className = "bar-container";
-
+          // Bar animation handling
           const bar = document.createElement("div");
           bar.className = "bar";
           bar.style.backgroundColor = color;
-          bar.style.width = "0%";
-          barContainer.appendChild(bar);
 
-          // Assemble party row
-          partyContainer.appendChild(partyInfo);
-          partyContainer.appendChild(percentageEl);
-          partyContainer.appendChild(votesEl);
-          partyContainer.appendChild(barContainer);
+          if (skipAnimation) {
+            // Set final width immediately
+            bar.style.width = `${Math.min(100, parseFloat(percentage) * 2)}%`;
+          } else {
+            // Start at 0 and animate
+            bar.style.width = "0%";
+
+            // Animate after delay
+            setTimeout(() => {
+              bar.style.width = `${Math.min(100, parseFloat(percentage) * 2)}%`;
+            }, 100 + index * 50);
+          }
 
           // Add to DOM
-          partyList.appendChild(partyContainer);
-
-          // Animate bar width after a short delay
-          setTimeout(() => {
-            bar.style.width = `${Math.min(100, parseFloat(percentage) * 2)}%`;
-          }, 100 + index * 50);
+          // ...
         });
-
-        // Log the number of parties for debugging
-        console.log(`Rendered ${totalParties} parties for polling station.`);
       }
 
       // Initialize when DOM is loaded

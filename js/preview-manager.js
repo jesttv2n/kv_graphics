@@ -3,6 +3,8 @@
  * Handles all preview window functionality using scaled display viewer
  */
 
+import { el, log } from "./index.js";
+
 class PreviewManager {
   constructor(dataService) {
     this.dataService = dataService;
@@ -29,7 +31,7 @@ class PreviewManager {
       fullscreenBtn.addEventListener("click", () => this.openFullscreen());
     }
 
-    // Listen for template changes - MODIFIED LINE
+    // Listen for template changes
     document.addEventListener("previewTemplateChanged", (event) => {
       this.setTemplate(event.detail.template);
     });
@@ -217,3 +219,6 @@ class PreviewManager {
     return this.activeTemplate;
   }
 }
+
+// Tilføj default export
+export default PreviewManager;

@@ -1,13 +1,13 @@
 /**
  * Mock Data Generator for KV Broadcast System
- * Creates realistic mock data when API endpoints are unavailable
  *
- * This script should be included in all three template HTML files
+ * Dette modul giver mock data til test og udvikling når API'er ikke er tilgængelige.
+ * Designet til at kunne slås til/fra via localStorage flag 'useMockData'.
  */
 
-/**
- * Mock data generator with configurable parameters
- */
+import { partiFarver } from "./data-models.js";
+import { getValgstedNavn } from "./data-models.js";
+
 class MockDataGenerator {
   constructor() {
     // Danish party letters and names
@@ -287,8 +287,10 @@ class MockDataGenerator {
 
     // Get valgsted name using the polling station data from your system
     let valgstedName = "Valgsted";
-    if (typeof getValgstedNavn === "function") {
+    try {
       valgstedName = getValgstedNavn(kommuneId, valgstedId);
+    } catch (error) {
+      console.warn("Could not get valgsted name from system");
     }
 
     // Generate parties with some variation from kommune level
@@ -371,69 +373,112 @@ class MockDataGenerator {
 }
 
 /**
- * Mock fetch function that returns mock data when real API fails
- * This function wraps the original fetch function and falls back to mock data
- *
- * @param {string} url - URL to fetch
- * @param {Object} options - Fetch options
- * @returns {Promise} - Promise that resolves to Response object
+ * Singleton instance af MockDataGenerator
  */
-function createMockFetch() {
-  const originalFetch = window.fetch;
-  const mockGenerator = new MockDataGenerator();
-
-  window.fetch = async function (url, options) {
-    // Try the original fetch first
-    try {
-      const response = await originalFetch(url, options);
-      if (response.ok) {
-        return response;
-      }
-      throw new Error(`Server responded with ${response.status}`);
-    } catch (error) {
-      console.warn(`API fetch failed: ${error.message}. Using mock data.`);
-
-      // Generate appropriate mock data based on URL
-      let mockData;
-
-      // Extract kommuneId and valgstedId from URL
-      const kommuneMatch = url.match(/results\/(\d+)(?:\/(\d+))?/);
-      const kandidatMatch = url.match(/areastatus\/(\d+)/);
-
-      if (kommuneMatch) {
-        const kommuneId = kommuneMatch[1];
-        const valgstedId = kommuneMatch[2];
-
-        if (valgstedId) {
-          // This is a valgsted request
-          mockData = mockGenerator.generateValgstedData(kommuneId, valgstedId);
-        } else {
-          // This is a kommune request
-          mockData = mockGenerator.generateKommuneData(kommuneId);
-        }
-      } else if (kandidatMatch) {
-        // This is a kandidat request
-        const kommuneId = kandidatMatch[1];
-        mockData = mockGenerator.generateKandidatData(kommuneId);
-      } else {
-        // Default mock data
-        mockData = mockGenerator.generateKommuneData();
-      }
-
-      // Create a mock Response object
-      return new Response(JSON.stringify(mockData), {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      });
-    }
-  };
-}
-
-// Initialize mock fetch when the script loads
-createMockFetch();
+const mockGenerator = new MockDataGenerator();
 
 /**
- * Check if we're in an iframe and notify parent that we're using mock data
+ * Tjekker om mock data skal bruges baseret på localStorage
+ * @returns {boolean} - true hvis mock data er aktiveret
+ */
+function isMockDataEnabled() {
+  return localStorage.getItem("useMockData") === "true";
+}
+
+/**
+ * Viser eller skjuler mock data indikator baseret på status
+ * @param {boolean} show - Om indikatoren skal vises
+ */
+function toggleMockDataIndicator(show) {
+  const indicator = document.getElementById("mockDataIndicator");
+  if (indicator) {
+    indicator.style.display = show ? "block" : "none";
+  }
+}
+
+/**
+ * Installerer mock fetch interceptor til at erstatte fetch API
+ * når mock data er aktiveret
+ */
+function installMockFetchInterceptor() {
+  console.log("Forsøger at installere mock data interceptor");
+  const originalFetch = window.fetch;
+
+  window.fetch = async function (url, options) {
+    // Hvis mock data ikke er aktiveret, brug original fetch
+    if (!isMockDataEnabled()) {
+      try {
+        const response = await originalFetch(url, options);
+        if (response.ok) {
+          return response;
+        }
+        // Hvis API fejler (fx 403), bruger vi mock data alligevel
+        console.warn(
+          `API returnerede ${response.status}, bruger mock data i stedet`
+        );
+      } catch (e) {
+        console.warn("Fetch API fejlede, bruger mock data i stedet:", e);
+      }
+    } else {
+      console.warn(
+        "Mock data aktiveret: Bruger testdata i stedet for API kald"
+      );
+    }
+
+    // Vi kommer hertil enten hvis mock data er aktiveret, eller hvis API kaldet fejlede
+
+    // Vis testdata indikator
+    toggleMockDataIndicator(true);
+
+    // Notificer parent window hvis vi er i en iframe
+    notifyParentAboutMockData();
+
+    // Generer passende mock data baseret på URL
+    let mockData;
+
+    // Extract kommuneId and valgstedId from URL
+    const kommuneMatch = url.match(/results\/(\d+)(?:\/(\d+))?/);
+    const kandidatMatch = url.match(/areastatus\/(\d+)/);
+
+    if (kommuneMatch) {
+      const kommuneId = kommuneMatch[1];
+      const valgstedId = kommuneMatch[2];
+
+      if (valgstedId) {
+        // This is a valgsted request
+        mockData = mockGenerator.generateValgstedData(kommuneId, valgstedId);
+      } else {
+        // This is a kommune request
+        mockData = mockGenerator.generateKommuneData(kommuneId);
+      }
+    } else if (kandidatMatch) {
+      // This is a kandidat request
+      const kommuneId = kandidatMatch[1];
+      mockData = mockGenerator.generateKandidatData(kommuneId);
+    } else {
+      // Default mock data
+      mockData = mockGenerator.generateKommuneData();
+    }
+
+    // Indfør en kunstig forsinkelse på 300-800ms for at simulere netværksanmodning
+    const delay = Math.random() * 500 + 300;
+    await new Promise((resolve) => setTimeout(resolve, delay));
+
+    // Create a mock Response object
+    return new Response(JSON.stringify(mockData), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  };
+
+  console.log("Mock data interceptor installeret");
+
+  // Sæt global flag
+  window.usingMockData = isMockDataEnabled();
+}
+
+/**
+ * Notify parent frame about mock data use if we're in an iframe
  */
 function notifyParentAboutMockData() {
   if (window.parent !== window) {
@@ -452,5 +497,37 @@ function notifyParentAboutMockData() {
   }
 }
 
-// Send notification after a short delay
-setTimeout(notifyParentAboutMockData, 500);
+/**
+ * Toggle mock data on/off
+ * @returns {boolean} - New mock data state
+ */
+function toggleMockData() {
+  const currentState = isMockDataEnabled();
+  const newState = !currentState;
+
+  localStorage.setItem("useMockData", newState.toString());
+
+  // Opdater UI indikatorer
+  toggleMockDataIndicator(newState);
+
+  // Sæt global flag
+  window.usingMockData = newState;
+
+  console.log(`Mock data ${newState ? "aktiveret" : "deaktiveret"}`);
+
+  return newState;
+}
+
+// Installér mock fetch interceptor automatisk
+installMockFetchInterceptor();
+
+/**
+ * Eksponér public API
+ */
+export {
+  mockGenerator,
+  isMockDataEnabled,
+  toggleMockDataIndicator,
+  installMockFetchInterceptor,
+  toggleMockData,
+};

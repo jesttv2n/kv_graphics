@@ -1,4 +1,56 @@
 /**
+ * Konsoliderede data modeller til KV Broadcast System
+ *
+ * Denne fil erstatter og konsoliderer følgende datafiler:
+ * - js/utils/municipality-data.js
+ * - js/utils/polling-station-data.js
+ * - js/utils/party-colors.js
+ */
+
+/**************************************
+ * Kommune data
+ **************************************/
+
+/**
+ * Municipality definitions
+ * Mapping between municipality IDs and names
+ */
+const kommuner = [
+  { id: "810", navn: "Brønderslev" },
+  { id: "813", navn: "Frederikshavn" },
+  { id: "820", navn: "Vesthimmerlands" },
+  { id: "825", navn: "Læsø" },
+  { id: "840", navn: "Rebild" },
+  { id: "846", navn: "Mariagerfjord" },
+  { id: "849", navn: "Jammerbugt" },
+  { id: "851", navn: "Aalborg" },
+  { id: "860", navn: "Hjørring" },
+];
+
+/**
+ * Get municipality name by ID
+ * @param {string} id - Municipality ID
+ * @returns {string} - Municipality name
+ */
+function getKommuneNavn(id) {
+  const kommune = kommuner.find((k) => k.id === id);
+  return kommune ? kommune.navn : "Ukendt kommune";
+}
+
+/**
+ * Get municipality by ID
+ * @param {string} id - Municipality ID
+ * @returns {object|null} - Municipality object or null if not found
+ */
+function getKommune(id) {
+  return kommuner.find((k) => k.id === id) || null;
+}
+
+/**************************************
+ * Valgsted data
+ **************************************/
+
+/**
  * Polling station definitions
  * Mapping between municipality IDs, polling station IDs and names
  */
@@ -195,3 +247,166 @@ function getValgsted(kommuneId, valgstedId) {
 function getValgstederForKommune(kommuneId) {
   return valgsteder[kommuneId] || [];
 }
+
+/**************************************
+ * Parti farver
+ **************************************/
+
+/**
+ * Party color mapping
+ * Maps party letter/abbreviation to color hex codes
+ */
+const partiFarver = {
+  A: "#e4002b", // Socialdemokratiet
+  B: "#0085c7", // Radikale Venstre
+  C: "#00a95c", // Konservative
+  D: "#f58220", // Nye Borgerlige
+  E: "#0085ca", // Klaus Riskær
+  F: "#d71440", // SF
+  G: "#005221", // Veganerpartiet
+  I: "#ffc20e", // Liberal Alliance
+  K: "#004b87", // Kristendemokraterne
+  L: "#2cac2a", // Lokallisterne (generisk)
+  M: "#522d80", // Moderaterne
+  O: "#e3006e", // Dansk Folkeparti
+  P: "#099d84", // Stram Kurs
+  Q: "#7bc143", // Frie Grønne
+  V: "#1e1e1e", // Venstre
+  Ø: "#c00", // Enhedslisten
+  Å: "#6a0dad", // Alternativet
+};
+
+// Tilføj lowercase-varianter til partiFarver
+Object.keys(partiFarver).forEach(
+  (k) => (partiFarver[k.toLowerCase()] = partiFarver[k])
+);
+
+/**
+ * Get color for party letter
+ * @param {string} bogstav - Party letter/abbreviation
+ * @returns {string} - Hex color code
+ */
+function farve(bogstav) {
+  return partiFarver[bogstav] || "#888";
+}
+
+/**************************************
+ * Data transformation og utility-funktioner
+ **************************************/
+
+/**
+ * Finder det parti, der har borgmesterposten
+ * @param {Array} parties - Liste af partier med kandidater
+ * @returns {Object|null} - Borgmesterparti eller null
+ */
+function findMayorParty(parties) {
+  if (!parties || !Array.isArray(parties)) return null;
+
+  for (const party of parties) {
+    if (party.candidates && Array.isArray(party.candidates)) {
+      const mayorCandidate = party.candidates.find((c) => c.isMayor);
+      if (mayorCandidate) {
+        return {
+          party: party,
+          mayor: mayorCandidate,
+        };
+      }
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Sorterer partier efter forskellige kriterier
+ * @param {Array} parties - Liste af partier
+ * @param {string} sortBy - "votes" | "letter" | "seats"
+ * @param {boolean} ascending - true for ascending, false for descending
+ * @returns {Array} - Sorteret liste af partier
+ */
+function sortParties(parties, sortBy = "votes", ascending = false) {
+  if (!parties || !Array.isArray(parties)) return [];
+
+  const sortedParties = [...parties];
+
+  // Filtrer partier uden stemmer/andel hvis påkrævet
+  const filteredParties = sortedParties.filter(
+    (p) => p.votesPercentage > 0 || p.votes > 0 || sortBy === "letter"
+  );
+
+  // Sortér efter specifikt kriterium
+  switch (sortBy) {
+    case "votes":
+      filteredParties.sort((a, b) => {
+        const aValue = a.votesPercentage || 0;
+        const bValue = b.votesPercentage || 0;
+        return ascending ? aValue - bValue : bValue - aValue;
+      });
+      break;
+    case "seats":
+      filteredParties.sort((a, b) => {
+        const aValue = a.seats || 0;
+        const bValue = b.seats || 0;
+        return ascending ? aValue - bValue : bValue - aValue;
+      });
+      break;
+    case "letter":
+      filteredParties.sort((a, b) => {
+        const aLetter = (a.letter || a.abbreviation || "").toUpperCase();
+        const bLetter = (b.letter || b.abbreviation || "").toUpperCase();
+        return ascending
+          ? aLetter.localeCompare(bLetter)
+          : bLetter.localeCompare(aLetter);
+      });
+      break;
+  }
+
+  return filteredParties;
+}
+
+/**
+ * Find en passende tæthedskategori baseret på antal elementer
+ * @param {number} count - Antal elementer
+ * @param {Object} thresholds - Grænseværdier for forskellige tæthedskategorier
+ * @returns {string} - Tæthedsklasse ("normal", "medium", "compact", "very-compact")
+ */
+function getDensityClass(
+  count,
+  thresholds = {
+    medium: 10,
+    compact: 14,
+    veryCompact: 18,
+  }
+) {
+  if (count > thresholds.veryCompact) {
+    return "density-very-compact";
+  } else if (count > thresholds.compact) {
+    return "density-compact";
+  } else if (count > thresholds.medium) {
+    return "density-medium";
+  }
+  return "density-normal";
+}
+
+// Eksportér alle funktioner og konstanter
+export {
+  // Kommune data
+  kommuner,
+  getKommuneNavn,
+  getKommune,
+
+  // Valgsted data
+  valgsteder,
+  getValgstedNavn,
+  getValgsted,
+  getValgstederForKommune,
+
+  // Parti farver
+  partiFarver,
+  farve,
+
+  // Data transformation
+  findMayorParty,
+  sortParties,
+  getDensityClass,
+};

@@ -2,6 +2,28 @@
  * Main application script for KV Broadcast System
  * With Pusher integration for remote control
  */
+// Importér fra centrale export modul
+import {
+  el,
+  log,
+  getUrlParam,
+  dispatchCustomEvent,
+  formatDateTime,
+  kommuner,
+  getKommuneNavn,
+  getValgstedNavn,
+  getValgstederForKommune,
+  isMockDataEnabled,
+  toggleMockData,
+  toggleMockDataIndicator,
+  ResultsTemplate,
+  CandidatesTemplate,
+  StationsTemplate,
+  DataService,
+  PreviewManager,
+  ProgramManager,
+  TransitionManager,
+} from "./index.js";
 
 // Global instances for managers
 let dataService;
@@ -9,20 +31,20 @@ let previewManager;
 let programManager;
 let transitionManager;
 
-// Application mode - control panel or display
-let isControlPanel = false;
-
-// Auto-update timer
+// Auto-update timer og state
 let autoUpdateTimer;
 let autoUpdateEnabled = true;
 let autoUpdateInterval = 30; // seconds
+
+// Global variable for the current selected template
+let currentSelectedTemplate = "results"; // Initialize with default
 
 /**
  * Initialize the application
  */
 function initApp() {
   // Determine if this is control panel or display based on URL parameter
-  isControlPanel = getUrlParam("mode") !== "display";
+  const isControlPanel = getUrlParam("mode") !== "display";
 
   // Log system start
   log(
@@ -34,7 +56,7 @@ function initApp() {
   // Initialize UI based on mode
   if (isControlPanel) {
     initControlPanelUI();
-    // Add this: Set default kommune after UI initialization
+    // Set default kommune after UI initialization
     setTimeout(() => {
       selectKommune("860"); // Default to kommune 860 (Hjørring)
     }, 100); // Small delay to ensure UI is ready
@@ -217,11 +239,6 @@ function setupValgstedTabs() {
  * Select a template
  * @param {string} templateName - Template to select
  */
-// First, declare this variable at the module/global scope
-// (outside the function, somewhere at the top of your file)
-let currentSelectedTemplate = "results"; // Initialize with default
-
-// Then your function
 function selectTemplate(templateName) {
   // Update UI to show active template
   document.querySelectorAll(".btn-template-circle").forEach((btn) => {
@@ -482,13 +499,9 @@ function updateDataDisplay(data) {
   // Update last update timestamp
   if (data.lastUpdated) {
     const dato = new Date(data.lastUpdated);
-    el("lastUpdate").textContent = dato.toLocaleTimeString("da-DK");
+    el("lastUpdate").textContent = formatDateTime(dato);
   }
 }
-
-/**
- * Add this script to your main.js file to add a toggle button for mock data
- */
 
 /**
  * Initialize mock data toggle button
@@ -520,39 +533,13 @@ function initMockDataToggle() {
 }
 
 /**
- * Toggle mock data on/off
- */
-function toggleMockData() {
-  // Get current state from localStorage
-  const currentState = localStorage.getItem("useMockData") === "true";
-
-  // Toggle state
-  const newState = !currentState;
-  localStorage.setItem("useMockData", newState.toString());
-
-  // Update button state
-  updateMockDataToggleState();
-
-  // Show notification
-  log(
-    `${newState ? "Aktiveret" : "Deaktiveret"} testdata mode`,
-    newState ? "warning" : "info"
-  );
-
-  // Refresh data to apply changes
-  if (typeof fetchDataForActiveTemplate === "function") {
-    fetchDataForActiveTemplate();
-  }
-}
-
-/**
  * Update toggle button state based on current setting
  */
 function updateMockDataToggleState() {
   const button = document.getElementById("toggleMockData");
   if (!button) return;
 
-  const isActive = localStorage.getItem("useMockData") === "true";
+  const isActive = isMockDataEnabled();
 
   if (isActive) {
     button.classList.add("active");

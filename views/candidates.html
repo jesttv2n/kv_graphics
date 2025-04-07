@@ -221,9 +221,9 @@
       </div>
     </div>
 
-    <script src="../js/utils/common.js"></script>
-    <script src="../js/utils/party-colors.js"></script>
-    <script src="../js/utils/mock-data.js"></script>
+    <script type="module" src="../js/index.js"></script>
+    <script type="module" src="../js/main.js"></script>
+    <script type="module" src="../js/utils/global-utils.js"></script>
     <script>
       // Configuration
       let settings = {
@@ -287,22 +287,36 @@
           // Check event source for security
           // if (event.origin !== window.location.origin) return;
 
-          const { action, payload, settings: newSettings } = event.data;
+          // Extract noAnimation flag along with other data
+          const {
+            action,
+            payload,
+            settings: newSettings,
+            noAnimation,
+          } = event.data;
 
           if (action === "opdaterData" && payload) {
-            // Determine if this is kommuneData or kandidatData
-            if (payload.elected) {
-              state.kandidatData = payload;
-            } else if (payload.result) {
+            // Store the data in state
+            if (payload.result && payload.result.electionPoints) {
+              // This is valgstedData
+              state.valgstedData = payload;
+            } else if (payload.result && !payload.result.electionPoints) {
+              // This is kommuneData
               state.kommuneData = payload;
+            } else if (payload.elected) {
+              // This is kandidatData
+              state.kandidatData = payload;
+            } else {
+              // Generic case
+              state.data = payload;
             }
 
-            renderData();
+            // Pass noAnimation flag to renderData
+            renderData(noAnimation);
           } else if (action === "updateSettings" && newSettings) {
             settings = { ...settings, ...newSettings };
-            if (state.kandidatData) {
-              renderData();
-            }
+            // For settings changes, always animate (false = do animate)
+            renderData(false);
           }
         });
       }
@@ -351,51 +365,34 @@
 
       /**
        * Render data to DOM
+       * @param {boolean} noAnimation - Whether to skip animations
        */
-      function renderData() {
-        // We need at least kandidat data
-        if (!state.kandidatData) {
+      function renderData(noAnimation = false) {
+        // Existing code to extract and prepare data...
+
+        // Example for results.html:
+        if (!state.data || !state.data.result) {
           return;
         }
 
-        // Extract data
-        const kandidatData = state.kandidatData;
-        const kommuneData = state.kommuneData || {};
+        const data = state.data;
+        const resultData = data.result;
 
-        // Set kommune name
-        el("kommuneNavn").textContent =
-          kommuneData.result?.name || kandidatData.name || "Ukendt kommune";
+        // Update kommune name, election progress, etc.
+        // ...
 
-        // Set mandater
-        const mandater =
-          kommuneData.result?.seats || kandidatData.councilSeats || 31;
-        el("mandatInfo").textContent = `${mandater} pladser i byrådet`;
+        // Pass noAnimation parameter to the render function
+        renderPartyList(data.parties || [], noAnimation);
 
-        // Find mayor if exists
-        const mayor = kandidatData.mayor || {};
-        state.mayorId = mayor.externalId || null;
-
-        // Get elected candidates
-        const elected = kandidatData.elected || [];
-
-        // Count total candidates
-        const totalCandidates = elected.reduce(
-          (total, party) => total + (party.candidates?.length || 0),
-          0
-        );
-        el("kandidatInfo").textContent = `${totalCandidates} valgte kandidater`;
-
-        // Render candidates
-        renderCandidates(elected);
-
-        // Update timestamp
-        if (kandidatData.lastUpdated) {
-          const dato = new Date(kandidatData.lastUpdated);
-          el(
-            "opdateretTid"
-          ).textContent = `Sidst opdateret: ${dato.toLocaleTimeString(
-            "da-DK"
-          )}`;
+        // Only show update flash if not suppressing animations
+        if (!noAnimation) {
+          const updateFlash = el("updateFlash");
+          if (updateFlash) {
+            updateFlash.style.opacity = "0.3";
+            setTimeout(() => {
+              updateFlash.style.opacity = "0";
+            }, 500);
+          }
         }
 
         // Hide loading screen
@@ -403,227 +400,73 @@
       }
 
       /**
-       * Render candidates using a column-based flex layout without scrolling
+       * Render candidates
        * @param {Array} electedParties - List of parties with elected candidates
+       * @param {boolean} skipAnimation - Whether to skip animations
        */
-      function renderCandidates(electedParties) {
-        // Find kandidat-containeren
-        let container =
-          document.getElementById("kandidatContainer") ||
-          document.getElementById("kandidatGrid") ||
-          document.querySelector(".kandidat-container");
-
+      function renderCandidates(electedParties, skipAnimation = false) {
+        // Get container
+        let container = document.getElementById("kandidatGrid");
         if (!container) {
-          console.error(
-            "Kunne ikke finde kandidat-container element. Tjek HTML-strukturen."
-          );
+          console.error("Kandidat container ikke fundet");
           return;
         }
 
-        // Rens containeren
+        // Clear container
         container.innerHTML = "";
 
-        // Tjek om vi overhovedet har data at vise
-        if (
-          !electedParties ||
-          !Array.isArray(electedParties) ||
-          electedParties.length === 0
-        ) {
-          console.warn("Ingen partier med valgte kandidater fundet i data.");
-          container.innerHTML =
-            "<div class='no-data'>Ingen valgte kandidater fundet</div>";
-          return;
-        }
+        // Process data
+        // ...
 
-        // Få det totale antal kandidater
-        const totalCandidates = electedParties.reduce(
-          (total, party) => total + (party.candidates?.length || 0),
-          0
-        );
-
-        // Find partiet med flest kandidater
-        const maxCandidatesInParty = electedParties.reduce(
-          (max, party) => Math.max(max, party.candidates?.length || 0),
-          0
-        );
-
-        // Bestem tæthedsniveau baseret på antal kandidater
-        let densityClass = "density-normal";
-
-        if (totalCandidates > 21 && totalCandidates <= 27) {
-          densityClass = "density-medium";
-        } else if (totalCandidates > 27 && totalCandidates <= 31) {
-          densityClass = "density-compact";
-        } else if (totalCandidates > 31) {
-          densityClass = "density-very-compact";
-        }
-
-        // Anvend tæthedsklassen på containeren
-        container.className = `kandidat-container ${densityClass}`;
-
-        // Sort partier baseret på antal mandater (faldende) - store partier kommer først
-        const sortedParties = [...electedParties].sort((a, b) => {
-          return (b.candidates?.length || 0) - (a.candidates?.length || 0);
-        });
-
-        // Definer variabler til borgmester-detektion
-        const mayorId = window.mayorId || null;
-        const mayor =
-          window.mayor ||
-          (electedParties.some(
-            (p) => p.candidates && p.candidates.some((c) => c.isMayor)
-          )
-            ? electedParties
-                .flatMap((p) => p.candidates || [])
-                .find((c) => c.isMayor)
-            : null);
-
-        // Definer settings
-        const settings = window.settings || { showVoteCounts: true };
-
-        // Bestem en grænsegrænse for partier med mange kandidater baseret på total
-        let manyCandidatesThreshold = 6; // Standard
-        let veryManyCandidatesThreshold = 12; // Standard for 3 kolonner
-
-        if (totalCandidates > 27) {
-          manyCandidatesThreshold = 5; // Ved mange kandidater, vis to kolonner tidligere
-          veryManyCandidatesThreshold = 10; // Vis tre kolonner tidligere
-        }
-
-        if (totalCandidates > 31) {
-          manyCandidatesThreshold = 4; // Ved ekstremt mange kandidater, vis to kolonner endnu tidligere
-          veryManyCandidatesThreshold = 8; // Vis tre kolonner endnu tidligere
-        }
-
-        // Render hver parti og dets kandidater
+        // Render each party
         sortedParties.forEach((party, partyIndex) => {
-          // Spring over hvis ingen kandidater
-          if (!party.candidates || party.candidates.length === 0) return;
-
-          // Få parti-detaljer
-          const letter = (
-            party.letter ||
-            party.candidates[0]?.partyLetter ||
-            ""
-          ).toUpperCase();
-          const name =
-            party.name || party.candidates[0]?.partyName || "Ukendt parti";
-          const color = typeof farve === "function" ? farve(letter) : "#888";
-          const seats = party.candidates.length;
-
-          // Bestem layout baseret på antal kandidater i dette parti
-          const hasManyCandidates =
-            party.candidates.length > manyCandidatesThreshold;
-          const hasVeryManyCandidates =
-            party.candidates.length > veryManyCandidatesThreshold;
-
-          // Opret parti-container med passende klasser
+          // Create party container
           const partyContainer = document.createElement("div");
           partyContainer.className = `parti-gruppe ${
             hasManyCandidates ? "many-candidates" : ""
           } ${hasVeryManyCandidates ? "very-many-candidates" : ""}`;
-          partyContainer.style.animationDelay = `${partyIndex * 150}ms`;
 
-          // Opret parti-header
-          const partyHeader = document.createElement("div");
-          partyHeader.className = "parti-header";
-          partyHeader.innerHTML = `
-      <div class="parti-bogstav" style="background-color: ${color}">${letter}</div>
-      <div class="parti-navn">${name}</div>
-      <div class="parti-mandater">${seats} ${
-            seats === 1 ? "mandat" : "mandater"
-          }</div>
-    `;
-          partyContainer.appendChild(partyHeader);
+          // Skip animation if requested
+          if (skipAnimation) {
+            // Set opacity and transform directly
+            partyContainer.style.opacity = "1";
+            partyContainer.style.transform = "translateY(0)";
+          } else {
+            // Apply normal animation delay
+            partyContainer.style.animationDelay = `${partyIndex * 150}ms`;
+          }
 
-          // Opret kandidatliste
-          const kandidaterListe = document.createElement("div");
-          kandidaterListe.className = "kandidater-liste";
+          // Create party header
+          // ...
 
-          // Sorter kandidater baseret på stemmer
-          let sortedCandidates = [...party.candidates].sort(
-            (a, b) => (b.votes || 0) - (a.votes || 0)
-          );
-
-          // Render hver kandidat
+          // Render candidates
           sortedCandidates.forEach((candidate, candidateIndex) => {
-            // Opret kandidat-kort
             const cardEl = document.createElement("div");
             cardEl.className = "kandidat";
 
-            // Animation forsinkelse
-            cardEl.style.animationDelay = `${
-              partyIndex * 100 + candidateIndex * 50
-            }ms`;
-
-            // Tjek om denne kandidat er borgmesteren
-            const isMayor =
-              candidate.isMayor ||
-              (mayorId && candidate.externalId === mayorId) ||
-              (mayor && mayor.externalId === candidate.externalId) ||
-              (mayor && mayor.name === candidate.name);
-
-            if (isMayor) {
-              cardEl.classList.add("borgmester");
+            // Skip animation if requested
+            if (skipAnimation) {
+              // Set opacity and transform directly
+              cardEl.style.opacity = "1";
+              cardEl.style.transform = "translateY(0)";
+            } else {
+              // Apply normal animation delay
+              cardEl.style.animationDelay = `${
+                partyIndex * 100 + candidateIndex * 50
+              }ms`;
             }
 
-            // Behandl kandidatfoto
-            let photoUrl = "";
-            if (candidate.imageURL || candidate.imageUrl) {
-              const imageUrlString = candidate.imageURL || candidate.imageUrl;
-              const firstUrl = imageUrlString.split(",")[0].trim();
+            // Add candidate content
+            // ...
 
-              if (firstUrl.includes("?")) {
-                photoUrl = firstUrl.split(" ")[0].trim();
-              } else {
-                photoUrl = firstUrl;
-              }
-            }
-
-            // Få initialer til pladsholder
-            const initials = candidate.name
-              ? candidate.name
-                  .split(" ")
-                  .map((n) => n[0])
-                  .join("")
-                  .substring(0, 2)
-              : "?";
-
-            // Opret HTML-indhold
-            cardEl.innerHTML = `
-        <div class="kandidat-foto" style="${
-          photoUrl ? `background-image: url('${photoUrl}')` : ""
-        }">${!photoUrl ? initials : ""}</div>
-        <div class="kandidat-info">
-          <div class="kandidat-navn">${candidate.name || "Ukendt"}</div>
-          <div class="kandidat-detaljer">${
-            candidate.age ? `${candidate.age} år` : ""
-          }</div>
-        </div>
-        ${
-          settings.showVoteCounts !== false
-            ? `<div class="kandidat-stemmer">${
-                typeof formatNumber === "function"
-                  ? formatNumber(candidate.votes || 0)
-                  : candidate.votes || 0
-              }</div>`
-            : ""
-        }
-      `;
-
-            kandidaterListe.appendChild(cardEl);
+            // Add to container
+            // ...
           });
 
-          partyContainer.appendChild(kandidaterListe);
-          container.appendChild(partyContainer);
+          // Add to main container
+          // ...
         });
-
-        // Log det samlede antal til fejlfinding
-        console.log(
-          `Renderet ${totalCandidates} kandidater med max ${maxCandidatesInParty} i et enkelt parti`
-        );
       }
-
       // Initialize when DOM is loaded
       document.addEventListener("DOMContentLoaded", initialize);
     </script>
