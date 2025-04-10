@@ -4,6 +4,14 @@
  * Integrated with Pusher for real-time communication
  */
 
+// Importer nødvendige utilities
+import {
+  log,
+  dispatchCustomEvent,
+  getKommuneNavn,
+  getValgstedNavn,
+} from "./index.js";
+
 class DataService {
   constructor() {
     this.apiBaseUrl = "https://election-api.services.tv2.dk/kv/kv21";
@@ -495,3 +503,6 @@ class DataService {
     log("Cache ryddet");
   }
 }
+
+// Tilføj default export
+export default DataService;

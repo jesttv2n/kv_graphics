@@ -3,11 +3,14 @@
  * Forenklet version med kun cut og dissolve funktioner
  */
 
+import { el, log, dispatchCustomEvent } from "./index.js";
+
 class TransitionManager {
   constructor(previewManager, programManager, dataService) {
     this.previewManager = previewManager;
     this.programManager = programManager;
     this.dataService = dataService;
+    this.currentTemplate = "results"; // Default template
 
     // Transition buttons
     this.btnCut = el("btnCut");
@@ -61,7 +64,21 @@ class TransitionManager {
       });
     }
 
+    // Add event listener for template changes
+    document.addEventListener("previewTemplateChanged", (event) => {
+      this.setCurrentTemplate(event.detail.template);
+    });
+
     log("Transition Manager initialiseret (simplificeret version)");
+  }
+
+  /**
+   * Set the current template
+   * @param {string} templateName - Template name
+   */
+  setCurrentTemplate(templateName) {
+    this.currentTemplate = templateName;
+    log(`TransitionManager: Current template set to ${templateName}`);
   }
 
   /**
@@ -70,26 +87,25 @@ class TransitionManager {
    * @param {string} type - Transition type (cut, dissolve)
    */
   executeTransition(type) {
-    if (!currentSelectedTemplate) {
+    // Brug den interne currentTemplate værdi i stedet for global
+    if (!this.currentTemplate) {
       log("No template selected for transition", "warning");
       return;
     }
 
     const params = {
-      kommuneId: dataService.getActiveKommuneId(),
-      valgstedId: dataService.getActiveValgstedId(),
+      kommuneId: this.dataService.getActiveKommuneId(),
+      valgstedId: this.dataService.getActiveValgstedId(),
     };
 
     // Local transition
-    programManager.setTemplate(currentSelectedTemplate, params);
-    programManager.setOnAir(true);
+    this.programManager.setTemplate(this.currentTemplate, params);
+    this.programManager.setOnAir(true);
 
     // Now send via Pusher to display
-    dataService.sendTransitionCommand(type, currentSelectedTemplate, params);
+    this.dataService.sendTransitionCommand(type, this.currentTemplate, params);
 
-    log(
-      `Executed ${type} transition with template: ${currentSelectedTemplate}`
-    );
+    log(`Executed ${type} transition with template: ${this.currentTemplate}`);
   }
 
   /**
@@ -156,3 +172,6 @@ class TransitionManager {
     }, 50);
   }
 }
+
+// Tilføj default export
+export default TransitionManager;

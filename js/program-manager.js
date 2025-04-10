@@ -3,6 +3,8 @@
  * Handles all program (PGM) window functionality
  */
 
+import { el, log, getKommuneNavn, getValgstedNavn } from "./index.js";
+
 class ProgramManager {
   constructor(dataService) {
     this.dataService = dataService;
@@ -349,3 +351,6 @@ class ProgramManager {
     log("Program taget af luften");
   }
 }
+
+// Tilføj default export
+export default ProgramManager;

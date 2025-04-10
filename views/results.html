@@ -166,9 +166,15 @@
       </div>
     </div>
 
-    <script src="../js/utils/common.js"></script>
-    <script src="../js/utils/party-colors.js"></script>
-    <script src="../js/utils/mock-data.js"></script>
+    <script
+      type="module"
+      src="https://js.pusher.com/8.2.0/pusher.min.js"
+    ></script>
+    <script type="module" src="../js/index.js"></script>
+    <script type="module" src="../js/main.js"></script>
+    <script type="module" src="../js/utils/global-utils.js"></script>
+    <script type="module" src="../js/kv25-data-service.js"></script>
+    <script type="module" src="../js/utils/mock-data.js"></script>
     <script>
       // Configuration
       let settings = {
@@ -230,49 +236,74 @@
           // Check event source for security
           // if (event.origin !== window.location.origin) return;
 
-          const { action, payload, settings: newSettings } = event.data;
+          // Extract noAnimation flag along with other data
+          const {
+            action,
+            payload,
+            settings: newSettings,
+            noAnimation,
+          } = event.data;
 
           if (action === "opdaterData" && payload) {
-            state.data = payload;
-            renderData();
+            // Store the data in state
+            if (payload.result && payload.result.electionPoints) {
+              // This is valgstedData
+              state.valgstedData = payload;
+            } else if (payload.result && !payload.result.electionPoints) {
+              // This is kommuneData
+              state.kommuneData = payload;
+            } else if (payload.elected) {
+              // This is kandidatData
+              state.kandidatData = payload;
+            } else {
+              // Generic case
+              state.data = payload;
+            }
+
+            // Pass noAnimation flag to renderData
+            renderData(noAnimation);
           } else if (action === "updateSettings" && newSettings) {
             settings = { ...settings, ...newSettings };
-            if (state.data) {
-              renderData();
-            }
+            // For settings changes, always animate (false = do animate)
+            renderData(false);
           }
         });
       }
 
       /**
-       * Fetch data from API
+       * Fetch data from APIs
        */
       async function fetchData() {
         try {
           el("loadingScreen").style.display = "flex";
 
-          const cacheKey = Date.now();
-          const url = `https://election-api.services.tv2.dk/kv/kv21/results/${state.kommuneId}?_cb=${cacheKey}`;
-
-          const response = await fetch(url);
-          if (!response.ok) {
-            throw new Error(
-              `Server returned ${response.status}: ${response.statusText}`
-            );
+          // Tjek om KV25DataService er tilgængelig
+          if (!window.kv25DataService) {
+            throw new Error("KV25DataService er ikke tilgængelig");
           }
 
-          const data = await response.json();
-          state.data = data;
+          // Hent både kommune-data og parti-data parallelt
+          const [kommuneData, partiData] = await Promise.all([
+            window.kv25DataService.getKommuneData(state.kommuneId),
+            window.kv25DataService.getPartiResultaterForKommune(
+              state.kommuneId
+            ),
+          ]);
 
+          // Gem data i state
+          state.kommuneData = kommuneData;
+          state.partiData = partiData;
+
+          // Render data til UI
           renderData();
         } catch (error) {
           console.error("Error fetching data:", error);
           el("kommuneNavn").textContent = "DATAFEJL";
           el("loadingScreen").innerHTML = `
-                    <div class="spinner">⟳</div>
-                    Fejl ved hentning af data: ${error.message}<br>
-                    Prøver igen om få sekunder...
-                `;
+      <div class="spinner">⟳</div>
+      Fejl ved hentning af data: ${error.message}<br>
+      Prøver igen om få sekunder...
+    `;
         }
       }
 
@@ -280,18 +311,20 @@
        * Render data to DOM
        */
       function renderData() {
-        if (!state.data || !state.data.result) {
+        // Tjek at vi har både kommune- og partidata
+        if (!state.kommuneData || !state.partiData || !state.partiData.parti) {
           return;
         }
 
-        const data = state.data;
-        const resultData = data.result;
+        // Udpak data
+        const kommuneData = state.kommuneData;
+        const partiData = state.partiData.parti || [];
 
-        // Update kommune name
-        el("kommuneNavn").textContent = resultData.name || "Ukendt kommune";
+        // Opdater kommune-navn og andre overordnede informationer
+        el("kommuneNavn").textContent = kommuneData.name || "Ukendt kommune";
 
-        // Update election progress
-        const pct = resultData.electionProgress || 0;
+        // Opdater optællingsstatus
+        const pct = kommuneData.electionProgress || 0;
         el("optaltIndikator").textContent = `${pct}% optalt`;
         el("optaltIndikator").className = "optalt-indikator";
 
@@ -303,33 +336,33 @@
           el("optaltIndikator").classList.add("minimalt");
         }
 
-        // Update other indicators
+        // Opdater valgdeltagelse og optællingsprocent
         el("optaelling").textContent = `Optællingstatus: ${pct}%`;
-        el("valgdeltagelse").textContent = resultData.votesPercentage
-          ? `Valgdeltagelse: ${resultData.votesPercentage.toFixed(1)}%`
-          : "Valgdeltagelse: Afventer";
 
-        // Update mandate info
-        const totalMandater =
-          resultData.totalSeats ||
-          (data.parties || []).reduce((sum, p) => sum + (p.seats || 0), 0);
+        const valgdeltagelse = kommuneData.votesProcent || 0;
+        el(
+          "valgdeltagelse"
+        ).textContent = `Valgdeltagelse: ${valgdeltagelse.toFixed(1)}%`;
+
+        // Opdater mandatinformation
+        const totalMandater = kommuneData.seats || 0;
         el("mandatInfo").textContent = `${totalMandater} mandater i alt`;
 
-        // Update party list
-        renderPartyList(data.parties || []);
+        // Render partiliste
+        renderPartyList(partiData);
 
-        // Update timestamp
-        if (data.lastUpdated) {
-          const dato = new Date(data.lastUpdated);
+        // Opdater timestamp
+        if (kommuneData.updated) {
+          const dato = new Date(kommuneData.updated);
           el(
             "opdateretTid"
           ).textContent = `Sidst opdateret: ${dato.toLocaleTimeString(
             "da-DK"
           )}`;
-          state.lastUpdateTimestamp = data.lastUpdated;
+          state.lastUpdateTimestamp = kommuneData.updated;
         }
 
-        // Hide loading screen
+        // Skjul loading screen
         el("loadingScreen").style.display = "none";
       }
 
@@ -344,19 +377,27 @@
 
         // Filter out parties with no votes if we have many parties
         let sortedParties = [...parties].filter(
-          (p) => p.votesPercentage > 0 || p.votes > 0
+          (p) => p.votesProcent > 0 || p.votesGiven > 0
         );
 
         // Sort parties based on settings
         if (settings.sortByVotes) {
-          sortedParties.sort((a, b) => b.votesPercentage - a.votesPercentage);
+          sortedParties.sort((a, b) => b.votesProcent - a.votesProcent);
         } else {
           // Sort alphabetically by letter
           sortedParties.sort((a, b) => {
-            const letterA = (a.letter || a.abbreviation || "").toUpperCase();
-            const letterB = (b.letter || b.abbreviation || "").toUpperCase();
+            const letterA = (a.partiLetter || "").toUpperCase();
+            const letterB = (b.partiLetter || "").toUpperCase();
             return letterA.localeCompare(letterB);
           });
+        }
+
+        // Begræns antal partier hvis indstilling er sat
+        if (
+          settings.partyLimit > 0 &&
+          sortedParties.length > settings.partyLimit
+        ) {
+          sortedParties = sortedParties.slice(0, settings.partyLimit);
         }
 
         // Determine density class based on number of parties
@@ -376,15 +417,11 @@
 
         // Create elements for each party
         sortedParties.forEach((party, index) => {
-          const letter = (
-            party.letter ||
-            party.abbreviation ||
-            ""
-          ).toUpperCase();
-          const name = party.name || "Ukendt";
+          const letter = (party.partiLetter || "").toUpperCase();
+          const name = party.name || party.shortName || "Ukendt";
           const percentage =
-            typeof party.votesPercentage === "number"
-              ? party.votesPercentage.toFixed(1)
+            typeof party.votesProcent === "number"
+              ? party.votesProcent.toFixed(1)
               : "0.0";
           const color = farve(letter);
 
@@ -409,9 +446,9 @@
           // Change from previous election
           if (
             settings.showDifference &&
-            typeof party.votesPercentageChange === "number"
+            typeof party.lastVotesProcent === "number"
           ) {
-            const change = party.votesPercentageChange;
+            const change = party.votesProcent - party.lastVotesProcent;
             let changeText = "";
             let changeClass = "neutral";
 
@@ -440,8 +477,11 @@
             seats === 1 ? "mandat" : "mandater"
           }`;
 
-          if (typeof party.seatsChange === "number") {
-            const seatsChange = party.seatsChange;
+          if (
+            typeof party.seatsChange === "number" &&
+            settings.showDifference
+          ) {
+            const seatsChange = party.seats - party.lastSeats;
             let changeText = "";
             let changeClass = "neutral";
 
@@ -482,7 +522,7 @@
 
           // Animate bar width after a short delay
           setTimeout(() => {
-            bar.style.width = `${Math.min(100, parseFloat(percentage))}%`;
+            bar.style.width = `${Math.min(100, parseFloat(percentage) * 2)}%`;
           }, 100 + index * 50);
         });
       }
