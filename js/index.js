@@ -18,7 +18,7 @@ import CandidatesTemplate from "./templates/candidates-template.js";
 import StationsTemplate from "./templates/stations-template.js";
 
 // Importér manager klasser
-import DataService from "./data-service.js";
+import DataService from "./kv25-data-service.js";
 import KV25DataService from "./kv25-data-service.js";
 import PreviewManager from "./preview-manager.js";
 import ProgramManager from "./program-manager.js";
