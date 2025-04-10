@@ -166,9 +166,15 @@
       </div>
     </div>
 
+    <script
+      type="module"
+      src="https://js.pusher.com/8.2.0/pusher.min.js"
+    ></script>
     <script type="module" src="../js/index.js"></script>
     <script type="module" src="../js/main.js"></script>
     <script type="module" src="../js/utils/global-utils.js"></script>
+    <script type="module" src="../js/kv25-data-service.js"></script>
+    <script type="module" src="../js/utils/mock-data.js"></script>
     <script>
       // Configuration
       let settings = {
@@ -265,125 +271,259 @@
       }
 
       /**
-       * Fetch data from API
+       * Fetch data from APIs
        */
       async function fetchData() {
         try {
           el("loadingScreen").style.display = "flex";
 
-          const cacheKey = Date.now();
-          const url = `https://election-api.services.tv2.dk/kv/kv21/results/${state.kommuneId}?_cb=${cacheKey}`;
-
-          const response = await fetch(url);
-          if (!response.ok) {
-            throw new Error(
-              `Server returned ${response.status}: ${response.statusText}`
-            );
+          // Tjek om KV25DataService er tilgængelig
+          if (!window.kv25DataService) {
+            throw new Error("KV25DataService er ikke tilgængelig");
           }
 
-          const data = await response.json();
-          state.data = data;
+          // Hent både kommune-data og parti-data parallelt
+          const [kommuneData, partiData] = await Promise.all([
+            window.kv25DataService.getKommuneData(state.kommuneId),
+            window.kv25DataService.getPartiResultaterForKommune(
+              state.kommuneId
+            ),
+          ]);
 
+          // Gem data i state
+          state.kommuneData = kommuneData;
+          state.partiData = partiData;
+
+          // Render data til UI
           renderData();
         } catch (error) {
           console.error("Error fetching data:", error);
           el("kommuneNavn").textContent = "DATAFEJL";
           el("loadingScreen").innerHTML = `
-                    <div class="spinner">⟳</div>
-                    Fejl ved hentning af data: ${error.message}<br>
-                    Prøver igen om få sekunder...
-                `;
+      <div class="spinner">⟳</div>
+      Fejl ved hentning af data: ${error.message}<br>
+      Prøver igen om få sekunder...
+    `;
         }
       }
 
       /**
        * Render data to DOM
-       * @param {boolean} noAnimation - Whether to skip animations
        */
-      function renderData(noAnimation = false) {
-        // Existing code to extract and prepare data...
-
-        // Example for results.html:
-        if (!state.data || !state.data.result) {
+      function renderData() {
+        // Tjek at vi har både kommune- og partidata
+        if (!state.kommuneData || !state.partiData || !state.partiData.parti) {
           return;
         }
 
-        const data = state.data;
-        const resultData = data.result;
+        // Udpak data
+        const kommuneData = state.kommuneData;
+        const partiData = state.partiData.parti || [];
 
-        // Update kommune name, election progress, etc.
-        // ...
+        // Opdater kommune-navn og andre overordnede informationer
+        el("kommuneNavn").textContent = kommuneData.name || "Ukendt kommune";
 
-        // Pass noAnimation parameter to the render function
-        renderPartyList(data.parties || [], noAnimation);
+        // Opdater optællingsstatus
+        const pct = kommuneData.electionProgress || 0;
+        el("optaltIndikator").textContent = `${pct}% optalt`;
+        el("optaltIndikator").className = "optalt-indikator";
 
-        // Only show update flash if not suppressing animations
-        if (!noAnimation) {
-          const updateFlash = el("updateFlash");
-          if (updateFlash) {
-            updateFlash.style.opacity = "0.3";
-            setTimeout(() => {
-              updateFlash.style.opacity = "0";
-            }, 500);
-          }
+        if (pct >= 95) {
+          el("optaltIndikator").classList.add("fuldt");
+        } else if (pct >= 50) {
+          el("optaltIndikator").classList.add("delvist");
+        } else {
+          el("optaltIndikator").classList.add("minimalt");
         }
 
-        // Hide loading screen
+        // Opdater valgdeltagelse og optællingsprocent
+        el("optaelling").textContent = `Optællingstatus: ${pct}%`;
+
+        const valgdeltagelse = kommuneData.votesProcent || 0;
+        el(
+          "valgdeltagelse"
+        ).textContent = `Valgdeltagelse: ${valgdeltagelse.toFixed(1)}%`;
+
+        // Opdater mandatinformation
+        const totalMandater = kommuneData.seats || 0;
+        el("mandatInfo").textContent = `${totalMandater} mandater i alt`;
+
+        // Render partiliste
+        renderPartyList(partiData);
+
+        // Opdater timestamp
+        if (kommuneData.updated) {
+          const dato = new Date(kommuneData.updated);
+          el(
+            "opdateretTid"
+          ).textContent = `Sidst opdateret: ${dato.toLocaleTimeString(
+            "da-DK"
+          )}`;
+          state.lastUpdateTimestamp = kommuneData.updated;
+        }
+
+        // Skjul loading screen
         el("loadingScreen").style.display = "none";
       }
 
       /**
        * Render party list
        * @param {Array} parties - List of parties
-       * @param {boolean} skipAnimation - Whether to skip animations
        */
-      function renderPartyList(parties, skipAnimation = false) {
+      function renderPartyList(parties) {
         // Get container
         const partyList = el("partyList");
         partyList.innerHTML = "";
 
-        // Filter and sort parties
-        // ...
+        // Filter out parties with no votes if we have many parties
+        let sortedParties = [...parties].filter(
+          (p) => p.votesProcent > 0 || p.votesGiven > 0
+        );
+
+        // Sort parties based on settings
+        if (settings.sortByVotes) {
+          sortedParties.sort((a, b) => b.votesProcent - a.votesProcent);
+        } else {
+          // Sort alphabetically by letter
+          sortedParties.sort((a, b) => {
+            const letterA = (a.partiLetter || "").toUpperCase();
+            const letterB = (b.partiLetter || "").toUpperCase();
+            return letterA.localeCompare(letterB);
+          });
+        }
+
+        // Begræns antal partier hvis indstilling er sat
+        if (
+          settings.partyLimit > 0 &&
+          sortedParties.length > settings.partyLimit
+        ) {
+          sortedParties = sortedParties.slice(0, settings.partyLimit);
+        }
+
+        // Determine density class based on number of parties
+        const totalParties = sortedParties.length;
+        let densityClass = "density-normal";
+
+        if (totalParties > 10 && totalParties <= 14) {
+          densityClass = "density-medium";
+        } else if (totalParties > 14 && totalParties <= 18) {
+          densityClass = "density-compact";
+        } else if (totalParties > 18) {
+          densityClass = "density-very-compact";
+        }
+
+        // Apply the density class to the container
+        partyList.className = `parti-liste ${densityClass}`;
 
         // Create elements for each party
         sortedParties.forEach((party, index) => {
+          const letter = (party.partiLetter || "").toUpperCase();
+          const name = party.name || party.shortName || "Ukendt";
+          const percentage =
+            typeof party.votesProcent === "number"
+              ? party.votesProcent.toFixed(1)
+              : "0.0";
+          const color = farve(letter);
+
           // Create container
           const partyContainer = document.createElement("div");
           partyContainer.className = "parti";
+          partyContainer.style.animationDelay = `${index * 100}ms`;
 
-          // Skip animation if requested
-          if (skipAnimation) {
-            // Set opacity and transform directly instead of animating
-            partyContainer.style.opacity = "1";
-            partyContainer.style.transform = "translateY(0)";
-          } else {
-            // Apply normal animation delay
-            partyContainer.style.animationDelay = `${index * 100}ms`;
+          // Create party info
+          const partyInfo = document.createElement("div");
+          partyInfo.className = "parti-info";
+          partyInfo.innerHTML = `
+      <div class="parti-bogstav" style="background-color: ${color}">${letter}</div>
+      <div class="parti-navn">${name}</div>
+    `;
+
+          // Percentage
+          const percentageEl = document.createElement("div");
+          percentageEl.className = "parti-procent";
+          percentageEl.textContent = `${percentage}%`;
+
+          // Change from previous election
+          if (
+            settings.showDifference &&
+            typeof party.lastVotesProcent === "number"
+          ) {
+            const change = party.votesProcent - party.lastVotesProcent;
+            let changeText = "";
+            let changeClass = "neutral";
+
+            if (change > 0) {
+              changeText = `+${change.toFixed(1)}`;
+              changeClass = "positive";
+            } else if (change < 0) {
+              changeText = `${change.toFixed(1)}`;
+              changeClass = "negative";
+            } else {
+              changeText = "±0.0";
+            }
+
+            const diffSpan = document.createElement("span");
+            diffSpan.className = `difference ${changeClass}`;
+            diffSpan.textContent = `(${changeText})`;
+            percentageEl.appendChild(diffSpan);
           }
 
-          // Create party info and other elements
-          // ...
+          // Mandates
+          const mandatesEl = document.createElement("div");
+          mandatesEl.className = "parti-mandater";
 
-          // Bar animation handling
+          const seats = typeof party.seats === "number" ? party.seats : 0;
+          mandatesEl.textContent = `${seats} ${
+            seats === 1 ? "mandat" : "mandater"
+          }`;
+
+          if (
+            typeof party.seatsChange === "number" &&
+            settings.showDifference
+          ) {
+            const seatsChange = party.seats - party.lastSeats;
+            let changeText = "";
+            let changeClass = "neutral";
+
+            if (seatsChange > 0) {
+              changeText = `+${seatsChange}`;
+              changeClass = "positive";
+            } else if (seatsChange < 0) {
+              changeText = `${seatsChange}`;
+              changeClass = "negative";
+            } else {
+              changeText = "±0";
+            }
+
+            const diffSpan = document.createElement("span");
+            diffSpan.className = `difference ${changeClass}`;
+            diffSpan.textContent = `(${changeText})`;
+            mandatesEl.appendChild(diffSpan);
+          }
+
+          // Bar container
+          const barContainer = document.createElement("div");
+          barContainer.className = "bar-container";
+
           const bar = document.createElement("div");
           bar.className = "bar";
           bar.style.backgroundColor = color;
+          bar.style.width = "0%";
+          barContainer.appendChild(bar);
 
-          if (skipAnimation) {
-            // Set final width immediately
-            bar.style.width = `${Math.min(100, parseFloat(percentage) * 2)}%`;
-          } else {
-            // Start at 0 and animate
-            bar.style.width = "0%";
-
-            // Animate after delay
-            setTimeout(() => {
-              bar.style.width = `${Math.min(100, parseFloat(percentage) * 2)}%`;
-            }, 100 + index * 50);
-          }
+          // Assemble party row
+          partyContainer.appendChild(partyInfo);
+          partyContainer.appendChild(percentageEl);
+          partyContainer.appendChild(mandatesEl);
+          partyContainer.appendChild(barContainer);
 
           // Add to DOM
-          // ...
+          partyList.appendChild(partyContainer);
+
+          // Animate bar width after a short delay
+          setTimeout(() => {
+            bar.style.width = `${Math.min(100, parseFloat(percentage) * 2)}%`;
+          }, 100 + index * 50);
         });
       }
 

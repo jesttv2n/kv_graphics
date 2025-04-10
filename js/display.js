@@ -15,6 +15,7 @@ let currentTemplate = null;
 let isActivated = false;
 // Reference til iframe programFrame
 let programFrame = null;
+let forwardDataUpdates = false;
 
 /**
  * Initialize the display
@@ -148,11 +149,24 @@ function setupPusherEventHandlers() {
   // DATA UPDATES - Disse skal blot videregives til aktiv iframe, IKKE indlæse nyt template
   channel.bind("client-kommune-data-updated", (data) => {
     log(`Modtog kommunedata opdatering for ${data.kommuneId}`);
-    if (isActivated && programFrame && programFrame.contentWindow) {
+    if (
+      isActivated &&
+      programFrame &&
+      programFrame.contentWindow &&
+      forwardDataUpdates
+    ) {
       // Send data til iframe uden at genindlæse template
       sendDataToFrame(data);
+      log("Kommunedata videresendt til frame (opdateringer er aktiveret)");
     } else {
-      log("Ignorerer data opdatering da skærmen ikke er aktiveret endnu");
+      log(
+        "Ignorerer kommunedata opdatering - " +
+          (!forwardDataUpdates
+            ? "automatiske opdateringer er deaktiveret"
+            : !isActivated
+            ? "display ikke aktiveret endnu"
+            : "anden årsag")
+      );
     }
   });
 
@@ -160,21 +174,47 @@ function setupPusherEventHandlers() {
     log(
       `Modtog valgstedsdata opdatering for ${data.kommuneId}/${data.valgstedId}`
     );
-    if (isActivated && programFrame && programFrame.contentWindow) {
+    if (
+      isActivated &&
+      programFrame &&
+      programFrame.contentWindow &&
+      forwardDataUpdates
+    ) {
       // Send data til iframe uden at genindlæse template
       sendDataToFrame(data);
+      log("Valgstedsdata videresendt til frame (opdateringer er aktiveret)");
     } else {
-      log("Ignorerer valgsted opdatering da skærmen ikke er aktiveret endnu");
+      log(
+        "Ignorerer valgstedsdata opdatering - " +
+          (!forwardDataUpdates
+            ? "automatiske opdateringer er deaktiveret"
+            : !isActivated
+            ? "display ikke aktiveret endnu"
+            : "anden årsag")
+      );
     }
   });
 
   channel.bind("client-kandidat-data-updated", (data) => {
     log(`Modtog kandidatdata opdatering for ${data.kommuneId}`);
-    if (isActivated && programFrame && programFrame.contentWindow) {
+    if (
+      isActivated &&
+      programFrame &&
+      programFrame.contentWindow &&
+      forwardDataUpdates
+    ) {
       // Send data til iframe uden at genindlæse template
       sendDataToFrame(data);
+      log("Kandidatdata videresendt til frame (opdateringer er aktiveret)");
     } else {
-      log("Ignorerer kandidat opdatering da skærmen ikke er aktiveret endnu");
+      log(
+        "Ignorerer kandidatdata opdatering - " +
+          (!forwardDataUpdates
+            ? "automatiske opdateringer er deaktiveret"
+            : !isActivated
+            ? "display ikke aktiveret endnu"
+            : "anden årsag")
+      );
     }
   });
 }
@@ -265,6 +305,8 @@ function loadTemplate(templateName, params = {}) {
  * @param {Object} params - Parameters
  */
 function executeTransition(type, template, params) {
+  // Aktiver data-opdateringer midlertidigt
+  forwardDataUpdates = true;
   const container = document.querySelector(".display-container");
   const currentFrame = document.getElementById("programFrame");
 
@@ -367,6 +409,10 @@ function executeTransition(type, template, params) {
       }, 1100); // Lidt længere end transition varigheden for sikkerhed
     }, 50); // Kort forsinkelse inden opstart
   };
+  // Deaktiver data-opdateringer efter kort tid (når transition er færdig)
+  setTimeout(() => {
+    forwardDataUpdates = false;
+  }, 3000); // 3 sekunder burde være nok til at få nyeste data
 
   // Log at processen er begyndt
   log(`Dissolve transition påbegyndt - venter på indlæsning af ${template}`);

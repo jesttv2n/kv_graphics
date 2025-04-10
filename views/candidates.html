@@ -220,10 +220,14 @@
         <div id="transitionContent" class="transition-content"></div>
       </div>
     </div>
-
+    <script
+      type="module"
+      src="https://js.pusher.com/8.2.0/pusher.min.js"
+    ></script>
     <script type="module" src="../js/index.js"></script>
     <script type="module" src="../js/main.js"></script>
     <script type="module" src="../js/utils/global-utils.js"></script>
+    <script type="module" src="../js/kv25-data-service.js"></script>
     <script>
       // Configuration
       let settings = {
@@ -321,45 +325,36 @@
         });
       }
 
-      /**
-       * Fetch data from APIs
-       */
       async function fetchData() {
         try {
           el("loadingScreen").style.display = "flex";
 
-          const cacheKey = Date.now();
+          // Tjek om KV25DataService er tilgængelig
+          if (!window.kv25DataService) {
+            throw new Error("KV25DataService er ikke tilgængelig");
+          }
 
-          // Fetch both kommune data and kandidat data
-          const kommuneUrl = `https://election-api.services.tv2.dk/kv/kv21/results/${state.kommuneId}?_cb=${cacheKey}`;
-          const kandidatUrl = `https://election-api.services.tv2.dk/kv/kv21/areastatus/${state.kommuneId}?_cb=${cacheKey}`;
-
-          // Fetch data in parallel
-          const [kommuneResponse, kandidatResponse] = await Promise.all([
-            fetch(kommuneUrl),
-            fetch(kandidatUrl),
+          // Hent både kommune-data og kandidat-data parallelt
+          const [kommuneData, kandidatData] = await Promise.all([
+            window.kv25DataService.getKommuneData(state.kommuneId),
+            window.kv25DataService.getKandidatData(state.kommuneId),
+            window.kv25DataService.getBorgmesterData(),
           ]);
 
-          if (!kommuneResponse.ok) {
-            throw new Error(`Kommune API error: ${kommuneResponse.status}`);
-          }
+          // Gem data i state
+          state.kommuneData = kommuneData;
+          state.kandidatData = kandidatData;
 
-          if (!kandidatResponse.ok) {
-            throw new Error(`Kandidat API error: ${kandidatResponse.status}`);
-          }
-
-          state.kommuneData = await kommuneResponse.json();
-          state.kandidatData = await kandidatResponse.json();
-
+          // Render data til UI
           renderData();
         } catch (error) {
           console.error("Error fetching data:", error);
           el("kommuneNavn").textContent = "DATAFEJL";
           el("loadingScreen").innerHTML = `
-                    <div class="spinner">⟳</div>
-                    Fejl ved hentning af data: ${error.message}<br>
-                    Prøver igen om få sekunder...
-                `;
+      <div class="spinner">⟳</div>
+      Fejl ved hentning af data: ${error.message}<br>
+      Prøver igen om få sekunder...
+    `;
         }
       }
 
@@ -367,105 +362,304 @@
        * Render data to DOM
        * @param {boolean} noAnimation - Whether to skip animations
        */
-      function renderData(noAnimation = false) {
-        // Existing code to extract and prepare data...
-
-        // Example for results.html:
-        if (!state.data || !state.data.result) {
+      function renderData() {
+        // Tjek at vi har både kommune- og kandidatdata
+        if (
+          !state.kommuneData ||
+          !state.kandidatData ||
+          !state.kandidatData.kandidat
+        ) {
           return;
         }
 
-        const data = state.data;
-        const resultData = data.result;
+        const kommuneData = state.kommuneData;
+        const kandidater = state.kandidatData.kandidat || [];
+        const borgmesterList = state.borgmesterData?.borgmester || [];
 
-        // Update kommune name, election progress, etc.
-        // ...
+        // Opdater kommune-navn
+        el("kommuneNavn").textContent = kommuneData.name || "Ukendt kommune";
 
-        // Pass noAnimation parameter to the render function
-        renderPartyList(data.parties || [], noAnimation);
+        // Optællingsstatus
+        const pct = kommuneData.electionProgress || 0;
+        el("optaltIndikator").textContent = `${pct}% optalt`;
+        el("optaltIndikator").className = "optalt-indikator";
 
-        // Only show update flash if not suppressing animations
-        if (!noAnimation) {
-          const updateFlash = el("updateFlash");
-          if (updateFlash) {
-            updateFlash.style.opacity = "0.3";
-            setTimeout(() => {
-              updateFlash.style.opacity = "0";
-            }, 500);
+        if (pct >= 95) {
+          el("optaltIndikator").classList.add("fuldt");
+        } else if (pct >= 50) {
+          el("optaltIndikator").classList.add("delvist");
+        } else {
+          el("optaltIndikator").classList.add("minimalt");
+        }
+
+        // Mandater info
+        const totalMandater = kommuneData.seats || 0;
+        el("mandatInfo").textContent = `${totalMandater} pladser i byrådet`;
+
+        // Kandidater info
+        const valgtekandidater = kandidater.filter((k) => k.elected).length;
+        el(
+          "kandidatInfo"
+        ).textContent = `${valgtekandidater} valgte kandidater`;
+
+        // Find borgmesteren baseret på kommuneId
+        let mayor = null;
+        if (borgmesterList.length > 0) {
+          // Find borgmester der matcher vores kommune-id
+          mayor = borgmesterList.find(
+            (b) => b.kommuneId.toString() === state.kommuneId
+          );
+
+          if (mayor) {
+            log(`Fandt borgmester: ${mayor.name} (${mayor.partiLetter})`);
           }
         }
 
-        // Hide loading screen
+        // Hvis vi ikke kunne finde borgmesteren i borgmesterdata, antag den med flest stemmer
+        if (!mayor && kandidater.length > 0) {
+          // Sort by votes and get the one with most votes
+          const sortedKandidater = [...kandidater].sort(
+            (a, b) => (b.votesGiven || 0) - (a.votesGiven || 0)
+          );
+
+          // Vi opretter et mock mayor-objekt med nødvendige felter
+          mayor = {
+            name: sortedKandidater[0].name,
+            id: sortedKandidater[0].id,
+            partiLetter: sortedKandidater[0].parti?.letter || "",
+            votes: sortedKandidater[0].votesGiven,
+          };
+
+          log(
+            `Ingen matchende borgmester data fundet. Antager kandidat med flest stemmer: ${mayor.name}`
+          );
+        }
+
+        // Konverter kandidatliste til parti-grupperet format
+        const electedParties = processKandidater(kandidater, mayor);
+
+        // Render kandidater
+        renderCandidates(electedParties);
+
+        // Opdater timestamp
+        if (kommuneData.updated) {
+          const dato = new Date(kommuneData.updated);
+          el(
+            "opdateretTid"
+          ).textContent = `Sidst opdateret: ${dato.toLocaleTimeString(
+            "da-DK"
+          )}`;
+        }
+
+        // Skjul loading screen
         el("loadingScreen").style.display = "none";
       }
 
       /**
-       * Render candidates
-       * @param {Array} electedParties - List of parties with elected candidates
-       * @param {boolean} skipAnimation - Whether to skip animations
+       * Gruppér kandidater efter parti og tilføj borgmester flag
+       * @param {Array} kandidater - Liste over kandidater
+       * @param {Object|null} mayor - Borgmesteren eller null hvis ingen fundet
+       * @returns {Array} - Partier med kandidater
        */
-      function renderCandidates(electedParties, skipAnimation = false) {
-        // Get container
-        let container = document.getElementById("kandidatGrid");
+      function processKandidater(kandidater, mayor) {
+        // Filtrer valgte kandidater
+        const valgte = kandidater.filter((k) => k.elected);
+
+        // Gruppér efter parti
+        const partiMap = {};
+
+        valgte.forEach((kandidat) => {
+          const parti = kandidat.parti;
+          if (!parti) return;
+
+          const partiLetter = parti.letter || "";
+
+          if (!partiMap[partiLetter]) {
+            partiMap[partiLetter] = {
+              letter: partiLetter,
+              name: parti.name || parti.shortName || "Ukendt parti",
+              candidates: [],
+            };
+          }
+
+          // Tjek om denne kandidat er borgmesteren baseret på id
+          // men kun hvis mayor faktisk eksisterer
+          const isMayor = mayor !== null && kandidat.id === mayor.id;
+
+          partiMap[partiLetter].candidates.push({
+            name: kandidat.name,
+            votes: kandidat.votesGiven || 0,
+            partyLetter: parti.letter,
+            partyName: parti.name || parti.shortName,
+            isMayor: isMayor,
+            externalId: `${kandidat.id}`,
+          });
+        });
+
+        // Sortér kandidater inden for hvert parti efter stemmetal
+        Object.values(partiMap).forEach((parti) => {
+          parti.candidates.sort((a, b) => b.votes - a.votes);
+        });
+
+        // Konverter til array sorteret efter kandidater
+        return Object.values(partiMap).sort(
+          (a, b) => b.candidates.length - a.candidates.length
+        );
+      }
+      /**
+       * Render candidates using a column-based flex layout
+       * @param {Array} electedParties - List of parties with elected candidates
+       */
+      function renderCandidates(electedParties) {
+        // Find kandidat-containeren
+        let container =
+          document.getElementById("kandidatGrid") ||
+          document.querySelector(".kandidat-container");
+
         if (!container) {
-          console.error("Kandidat container ikke fundet");
+          console.error("Kunne ikke finde kandidat-container element");
           return;
         }
 
-        // Clear container
+        // Rens containeren
         container.innerHTML = "";
 
-        // Process data
-        // ...
+        // Tjek om vi overhovedet har data at vise
+        if (
+          !electedParties ||
+          !Array.isArray(electedParties) ||
+          electedParties.length === 0
+        ) {
+          console.warn("Ingen partier med valgte kandidater fundet i data");
+          container.innerHTML =
+            "<div class='no-data'>Ingen valgte kandidater fundet</div>";
+          return;
+        }
 
-        // Render each party
-        sortedParties.forEach((party, partyIndex) => {
-          // Create party container
+        // Få det totale antal kandidater
+        const totalCandidates = electedParties.reduce(
+          (total, party) => total + (party.candidates?.length || 0),
+          0
+        );
+
+        // Bestem tæthedsniveau baseret på antal kandidater
+        let densityClass = "density-normal";
+
+        if (totalCandidates > 21 && totalCandidates <= 27) {
+          densityClass = "density-medium";
+        } else if (totalCandidates > 27 && totalCandidates <= 31) {
+          densityClass = "density-compact";
+        } else if (totalCandidates > 31) {
+          densityClass = "density-very-compact";
+        }
+
+        // Anvend tæthedsklassen på containeren
+        container.className = `kandidat-container ${densityClass}`;
+
+        // Definer grænseværdier for partier med mange kandidater
+        let manyCandidatesThreshold = 6; // Standard
+        let veryManyCandidatesThreshold = 12; // Standard for 3 kolonner
+
+        if (totalCandidates > 27) {
+          manyCandidatesThreshold = 5; // Ved mange kandidater, vis to kolonner tidligere
+          veryManyCandidatesThreshold = 10; // Vis tre kolonner tidligere
+        }
+
+        if (totalCandidates > 31) {
+          manyCandidatesThreshold = 4; // Ved ekstremt mange kandidater
+          veryManyCandidatesThreshold = 8; // Vis tre kolonner endnu tidligere
+        }
+
+        // Render hver parti og dets kandidater
+        electedParties.forEach((party, partyIndex) => {
+          // Spring over hvis ingen kandidater
+          if (!party.candidates || party.candidates.length === 0) return;
+
+          // Få parti-detaljer
+          const letter = (party.letter || "").toUpperCase();
+          const name = party.name || "Ukendt parti";
+          const color = typeof farve === "function" ? farve(letter) : "#888";
+          const seats = party.candidates.length;
+
+          // Bestem layout baseret på antal kandidater i dette parti
+          const hasManyCandidates =
+            party.candidates.length > manyCandidatesThreshold;
+          const hasVeryManyCandidates =
+            party.candidates.length > veryManyCandidatesThreshold;
+
+          // Opret parti-container med passende klasser
           const partyContainer = document.createElement("div");
           partyContainer.className = `parti-gruppe ${
             hasManyCandidates ? "many-candidates" : ""
           } ${hasVeryManyCandidates ? "very-many-candidates" : ""}`;
+          partyContainer.style.animationDelay = `${partyIndex * 150}ms`;
 
-          // Skip animation if requested
-          if (skipAnimation) {
-            // Set opacity and transform directly
-            partyContainer.style.opacity = "1";
-            partyContainer.style.transform = "translateY(0)";
-          } else {
-            // Apply normal animation delay
-            partyContainer.style.animationDelay = `${partyIndex * 150}ms`;
-          }
+          // Opret parti-header
+          const partyHeader = document.createElement("div");
+          partyHeader.className = "parti-header";
+          partyHeader.innerHTML = `
+      <div class="parti-bogstav" style="background-color: ${color}">${letter}</div>
+      <div class="parti-navn">${name}</div>
+      <div class="parti-mandater">${seats} ${
+            seats === 1 ? "mandat" : "mandater"
+          }</div>
+    `;
+          partyContainer.appendChild(partyHeader);
 
-          // Create party header
-          // ...
+          // Opret kandidatliste
+          const kandidaterListe = document.createElement("div");
+          kandidaterListe.className = "kandidater-liste";
 
-          // Render candidates
-          sortedCandidates.forEach((candidate, candidateIndex) => {
+          // Render hver kandidat
+          party.candidates.forEach((candidate, candidateIndex) => {
+            // Opret kandidat-kort
             const cardEl = document.createElement("div");
             cardEl.className = "kandidat";
 
-            // Skip animation if requested
-            if (skipAnimation) {
-              // Set opacity and transform directly
-              cardEl.style.opacity = "1";
-              cardEl.style.transform = "translateY(0)";
-            } else {
-              // Apply normal animation delay
-              cardEl.style.animationDelay = `${
-                partyIndex * 100 + candidateIndex * 50
-              }ms`;
+            // Animation forsinkelse
+            cardEl.style.animationDelay = `${
+              partyIndex * 100 + candidateIndex * 50
+            }ms`;
+
+            // Tjek om denne kandidat er borgmesteren
+            if (candidate.isMayor) {
+              cardEl.classList.add("borgmester");
             }
 
-            // Add candidate content
-            // ...
+            // Opret HTML-indhold
+            const initials = candidate.name
+              ? candidate.name
+                  .split(" ")
+                  .map((n) => n[0])
+                  .join("")
+                  .substring(0, 2)
+              : "?";
 
-            // Add to container
-            // ...
+            cardEl.innerHTML = `
+        <div class="kandidat-foto">${initials}</div>
+        <div class="kandidat-info">
+          <div class="kandidat-navn">${candidate.name || "Ukendt"}</div>
+          <div class="kandidat-detaljer"></div>
+        </div>
+        ${
+          settings.showVoteCounts !== false
+            ? `<div class="kandidat-stemmer">${
+                typeof formatNumber === "function"
+                  ? formatNumber(candidate.votes || 0)
+                  : candidate.votes || 0
+              }</div>`
+            : ""
+        }
+      `;
+
+            kandidaterListe.appendChild(cardEl);
           });
 
-          // Add to main container
-          // ...
+          partyContainer.appendChild(kandidaterListe);
+          container.appendChild(partyContainer);
         });
+
+        console.log(`Renderet ${totalCandidates} kandidater`);
       }
       // Initialize when DOM is loaded
       document.addEventListener("DOMContentLoaded", initialize);

@@ -20,6 +20,7 @@ import {
   CandidatesTemplate,
   StationsTemplate,
   DataService,
+  KV25DataService,
   PreviewManager,
   ProgramManager,
   TransitionManager,
@@ -68,6 +69,11 @@ function initApp() {
   dataService = new DataService();
   dataService.setAsControlPanel(isControlPanel);
 
+  // Initialiser KV25 dataservice for testing - gør den globalt tilgængelig
+  window.kv25DataService = new KV25DataService();
+  // Vi sætter den også som control panel for at aktivere Pusher-events
+  window.kv25DataService.setAsControlPanel(isControlPanel);
+
   if (isControlPanel) {
     previewManager = new PreviewManager(dataService);
     programManager = new ProgramManager(dataService);
@@ -82,6 +88,7 @@ function initApp() {
     window.templatesManager.results = new ResultsTemplate(dataService);
     window.templatesManager.candidates = new CandidatesTemplate(dataService);
     window.templatesManager.stations = new StationsTemplate(dataService);
+    // I main.js eller lignende
 
     // Setup auto-update for control panel
     initAutoUpdate();

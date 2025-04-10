@@ -149,7 +149,7 @@
 
       <div class="visualization-header">
         <div class="header-left">
-          <div class="title-box"><h1>KV21</h1></div>
+          <div class="title-box"><h1>KV25</h1></div>
           <h2>Valgstedsresultater</h2>
         </div>
         <div class="header-right">
@@ -170,7 +170,7 @@
       </div>
 
       <div class="visualization-footer">
-        <div>Kommunalvalg 2021</div>
+        <div>Kommunalvalg 2025</div>
         <div>
           <div id="opdateretTid" class="opdateret">
             Sidst opdateret: --:--:--
@@ -198,10 +198,15 @@
         <div id="transitionContent" class="transition-content"></div>
       </div>
     </div>
-
+    <script
+      type="module"
+      src="https://js.pusher.com/8.2.0/pusher.min.js"
+    ></script>
     <script type="module" src="../js/index.js"></script>
     <script type="module" src="../js/main.js"></script>
     <script type="module" src="../js/utils/global-utils.js"></script>
+    <script type="module" src="../js/kv25-data-service.js"></script>
+    <script type="module" src="../js/utils/mock-data.js"></script>
     <script>
       // Configuration
       let settings = {
@@ -215,7 +220,9 @@
         kommuneId: null,
         valgstedId: null,
         valgstedData: null,
+        valgstedParties: null,
         kommuneData: null,
+        kommuneParties: null,
         lastUpdateTimestamp: null,
       };
 
@@ -264,9 +271,6 @@
        */
       function setupMessageListener() {
         window.addEventListener("message", function (event) {
-          // Check event source for security
-          // if (event.origin !== window.location.origin) return;
-
           // Extract noAnimation flag along with other data
           const {
             action,
@@ -276,19 +280,21 @@
           } = event.data;
 
           if (action === "opdaterData" && payload) {
-            // Store the data in state
-            if (payload.result && payload.result.electionPoints) {
-              // This is valgstedData
-              state.valgstedData = payload;
-            } else if (payload.result && !payload.result.electionPoints) {
-              // This is kommuneData
-              state.kommuneData = payload;
-            } else if (payload.elected) {
-              // This is kandidatData
-              state.kandidatData = payload;
-            } else {
-              // Generic case
-              state.data = payload;
+            // Determine data type and store accordingly
+            if (payload.parti) {
+              // Parti data format
+              if (payload.id && payload.id.toString() === state.valgstedId) {
+                state.valgstedParties = payload;
+              } else {
+                state.kommuneParties = payload;
+              }
+            } else if (payload.updated) {
+              // General data format
+              if (payload.id && payload.id.toString() === state.valgstedId) {
+                state.valgstedData = payload;
+              } else {
+                state.kommuneData = payload;
+              }
             }
 
             // Pass noAnimation flag to renderData
@@ -301,233 +307,58 @@
         });
       }
 
-      /**
-       * Sammenligner to datasæt og returnerer en liste af ændringer
-       * med sammenligning til kommuneniveau
-       */
-      function findDataChanges(oldData, newData, kommuneData) {
-        if (!oldData || !oldData.parties || !newData || !newData.parties)
-          return [];
-
-        const changes = [];
-
-        // Map oldData partier for lettere opslag
-        const oldParties = {};
-        oldData.parties.forEach((party) => {
-          oldParties[party.letter || party.abbreviation] = party;
-        });
-
-        // Map kommuneData partier hvis det findes
-        const kommuneParties = {};
-        if (kommuneData && kommuneData.parties) {
-          kommuneData.parties.forEach((party) => {
-            kommuneParties[party.letter || party.abbreviation] = party;
-          });
-        }
-
-        // Tjek hver parti i nydata
-        newData.parties.forEach((newParty) => {
-          const letter = newParty.letter || newParty.abbreviation;
-          const oldParty = oldParties[letter];
-          const kommuneParty = kommuneParties[letter];
-
-          // Grundlæggende ændringsdetektion
-          const change = {
-            partyLetter: letter,
-            percentChange: false,
-            votesChange: false,
-            compareToMunicipality: false,
-          };
-
-          // Tjek om procenter eller stemmer er ændret fra sidste opdatering
-          if (oldParty) {
-            if (oldParty.votesPercentage !== newParty.votesPercentage) {
-              change.percentChange = true;
-            }
-
-            if (oldParty.votes !== newParty.votes) {
-              change.votesChange = true;
-            }
-          }
-
-          // Sammenlign med kommunedata hvis det er tilgængeligt
-          if (kommuneParty) {
-            change.compareToMunicipality = true;
-
-            // Beregn forskellen mellem valgstedets procent og kommunens procent
-            const stationPercent = newParty.votesPercentage || 0;
-            const kommunePercent = kommuneParty.votesPercentage || 0;
-            const diff = stationPercent - kommunePercent;
-
-            // Kategoriser forskellen
-            change.comparisonDiff = diff.toFixed(1);
-            change.comparisonHigher = diff > 0.5;
-            change.comparisonLower = diff < -0.5;
-            change.comparisonSame = Math.abs(diff) <= 0.5;
-          }
-
-          // Tilføj ændringen til listen hvis der er nogen ændringer
-          if (
-            change.percentChange ||
-            change.votesChange ||
-            change.compareToMunicipality
-          ) {
-            changes.push(change);
-          }
-        });
-
-        return changes;
-      }
+      // Vi fjerner de gamle opdateringsfunktioner da vi nu altid gendanner hele listen
+      // når data opdateres - dette forenkler koden betydeligt
 
       /**
-       * Opdater eksisterende partiliste ved at ændre værdierne og animere ændrede værdier
-       * @param {Array} partier - Liste af partier
-       * @param {Array} changes - Liste af ændringer
-       * @param {Object} kommuneData - Kommunedata til sammenligning (valgfrit)
-       */
-      function opdaterPartiListe(partier, changes, kommuneData) {
-        // Find alle eksisterende parti-elementer
-        const partiElements = document.querySelectorAll(".parti");
-        if (!partiElements.length) return;
-
-        // Sorter partier efter stemmeprocent
-        const sortedPartier = (partier || []).sort(
-          (a, b) => b.votesPercentage - a.votesPercentage
-        );
-
-        // Få kommunepartier for sammenligning hvis tilgængelige
-        const kommuneParties = {};
-        if (kommuneData && kommuneData.parties) {
-          kommuneData.parties.forEach((party) => {
-            kommuneParties[party.letter || party.abbreviation] = party;
-          });
-        }
-
-        // Opdater hvert parti-element
-        partiElements.forEach((partiElement, index) => {
-          if (index >= sortedPartier.length) return;
-
-          const parti = sortedPartier[index];
-          const partiLetter = partiElement.dataset.letter;
-
-          // Find procent og stemmer elementer
-          const procentElement = partiElement.querySelector(".parti-procent");
-          const stemmerElement = partiElement.querySelector(".parti-stemmer");
-          const barElement = partiElement.querySelector(".bar");
-
-          if (!procentElement || !stemmerElement || !barElement) return;
-
-          // Tjek om dette parti har ændringer
-          const hasChanges = changes.find((c) => c.partyLetter === partiLetter);
-
-          // Opdater værdierne
-          const procent =
-            typeof parti.votesPercentage === "number"
-              ? parti.votesPercentage.toFixed(1)
-              : "0.0";
-
-          const stemmer = parti.votes || 0;
-
-          // Opdater procent
-          procentElement.textContent = `${procent}%`;
-
-          // Tilføj sammenligning med kommunen hvis tilgængelig
-          const kommuneParty = kommuneParties[partiLetter];
-          if (kommuneParty && hasChanges && hasChanges.compareToMunicipality) {
-            const diff = hasChanges.comparisonDiff;
-            let comparisonClass = "same";
-            let arrowSymbol = "⟷";
-
-            if (hasChanges.comparisonHigher) {
-              comparisonClass = "higher";
-              arrowSymbol = "↑";
-            } else if (hasChanges.comparisonLower) {
-              comparisonClass = "lower";
-              arrowSymbol = "↓";
-            }
-
-            // Tilføj eller opdater sammenligningselement
-            let comparisonEl = procentElement.querySelector(
-              ".comparison-indicator"
-            );
-            if (!comparisonEl) {
-              comparisonEl = document.createElement("span");
-              comparisonEl.className = `comparison-indicator ${comparisonClass}`;
-              procentElement.appendChild(comparisonEl);
-            } else {
-              comparisonEl.className = `comparison-indicator ${comparisonClass}`;
-            }
-
-            comparisonEl.innerHTML = `
-        <span class="comparison-arrow">${arrowSymbol}</span>
-        <span class="comparison-text">${diff > 0 ? "+" : ""}${diff}%</span>
-      `;
-          }
-
-          // Opdater stemmer
-          stemmerElement.textContent = `${formatNumber(stemmer)} stemmer`;
-
-          // Opdater søjle
-          barElement.style.width = `${Math.min(100, parseFloat(procent) * 2)}%`;
-
-          // Tilføj highlight animation til ændrede elementer
-          if (hasChanges) {
-            if (hasChanges.percentChange) {
-              procentElement.classList.add("parti-data-change");
-              setTimeout(() => {
-                procentElement.classList.remove("parti-data-change");
-              }, 1500);
-            }
-
-            if (hasChanges.votesChange) {
-              stemmerElement.classList.add("parti-data-change");
-              setTimeout(() => {
-                stemmerElement.classList.remove("parti-data-change");
-              }, 1500);
-            }
-          }
-        });
-      }
-
-      /**
-       * Fetch data from APIs
+       * Fetch data from APIs using the KV25 API
        */
       async function fetchData() {
         try {
           el("loadingScreen").style.display = "flex";
 
-          const cacheKey = Date.now();
-
-          // Prepare URLs
-          const kommuneUrl = `https://election-api.services.tv2.dk/kv/kv21/results/${state.kommuneId}?_cb=${cacheKey}`;
-          const valgstedUrl = `https://election-api.services.tv2.dk/kv/kv21/results/${state.kommuneId}/${state.valgstedId}?_cb=${cacheKey}`;
-
-          // Fetch both datasets in parallel
-          const [kommuneResponse, valgstedResponse] = await Promise.all([
-            fetch(kommuneUrl),
-            fetch(valgstedUrl),
-          ]);
-
-          if (!kommuneResponse.ok) {
-            throw new Error(`Kommune API error: ${kommuneResponse.status}`);
+          // Tjek om KV25DataService er tilgængelig
+          if (!window.kv25DataService) {
+            throw new Error("KV25DataService er ikke tilgængelig");
           }
 
-          if (!valgstedResponse.ok) {
-            throw new Error(`Valgsted API error: ${valgstedResponse.status}`);
-          }
+          // Hent både kommune-data, valgsteds-data, og parti-data parallelt
+          const [kommuneData, kommuneParties, valgstedData, valgstedParties] =
+            await Promise.all([
+              window.kv25DataService.getKommuneData(state.kommuneId),
+              window.kv25DataService.getPartiResultaterForKommune(
+                state.kommuneId
+              ),
+              window.kv25DataService.getValgstedData(state.valgstedId),
+              window.kv25DataService.getPartiResultaterForValgsted(
+                state.valgstedId
+              ),
+            ]);
 
-          state.kommuneData = await kommuneResponse.json();
-          state.valgstedData = await valgstedResponse.json();
+          // Gem data i state
+          state.kommuneData = kommuneData;
+          state.kommuneParties = kommuneParties;
+          state.valgstedData = valgstedData;
+          state.valgstedParties = valgstedParties;
 
+          // Log info om data hentet
+          console.log(
+            `Data hentet for valgsted ${state.valgstedId} i kommune ${state.kommuneId}`
+          );
+          console.log(
+            `Fandt ${valgstedParties.parti?.length || 0} partier for valgsted`
+          );
+
+          // Render data til UI
           renderData();
         } catch (error) {
           console.error("Error fetching data:", error);
           el("valgstedNavn").textContent = "DATAFEJL";
           el("loadingScreen").innerHTML = `
-                    <div class="spinner">⟳</div>
-                    Fejl ved hentning af data: ${error.message}<br>
-                    Prøver igen om få sekunder...
-                `;
+            <div class="spinner">⟳</div>
+            Fejl ved hentning af data: ${error.message}<br>
+            Prøver igen om få sekunder...
+          `;
         }
       }
 
@@ -536,23 +367,54 @@
        * @param {boolean} noAnimation - Whether to skip animations
        */
       function renderData(noAnimation = false) {
-        // Existing code to extract and prepare data...
-
-        // Example for results.html:
-        if (!state.data || !state.data.result) {
+        // Vi skal have både valgsted-data og valgsted-partier for at vise noget meningsfuldt
+        if (
+          !state.valgstedData ||
+          !state.valgstedParties ||
+          !state.valgstedParties.parti
+        ) {
           return;
         }
 
-        const data = state.data;
-        const resultData = data.result;
+        // Udpak data
+        const valgstedData = state.valgstedData;
+        const valgstedParties = state.valgstedParties.parti || [];
 
-        // Update kommune name, election progress, etc.
-        // ...
+        // Opdater valgsted og kommune navne
+        el("valgstedNavn").textContent = valgstedData.name || "Ukendt valgsted";
 
-        // Pass noAnimation parameter to the render function
-        renderPartyList(data.parties || [], noAnimation);
+        if (state.kommuneData) {
+          el("kommuneNavn").textContent =
+            state.kommuneData.name || "Ukendt kommune";
+        }
 
-        // Only show update flash if not suppressing animations
+        // Opdater statistik
+        const votesGiven = valgstedData.votesGiven || 0;
+        el("stemmeInfo").textContent = `${formatNumber(
+          votesGiven
+        )} stemmer afgivet`;
+
+        const votesPercentage = valgstedData.votesProcent || 0;
+        el(
+          "deltagelsesInfo"
+        ).textContent = `Stemmeprocent: ${votesPercentage.toFixed(1)}%`;
+
+        // Render partiliste - kommuneParties er valgfri for sammenligning
+        const kommuneParties = state.kommuneParties?.parti || [];
+        renderPartyList(valgstedParties, kommuneParties, noAnimation);
+
+        // Opdater tidsstempel
+        if (valgstedData.updated) {
+          const dato = new Date(valgstedData.updated);
+          el(
+            "opdateretTid"
+          ).textContent = `Sidst opdateret: ${dato.toLocaleTimeString(
+            "da-DK"
+          )}`;
+          state.lastUpdateTimestamp = valgstedData.updated;
+        }
+
+        // Vis update flash hvis ikke animationer er slået fra
         if (!noAnimation) {
           const updateFlash = el("updateFlash");
           if (updateFlash) {
@@ -563,63 +425,173 @@
           }
         }
 
-        // Hide loading screen
+        // Skjul loading screen
         el("loadingScreen").style.display = "none";
       }
 
       /**
-       * Render party list
-       * @param {Array} parties - List of parties
+       * Render party list adaptively for polling station results
+       * @param {Array} parties - List of parties from valgsted
+       * @param {Array} kommuneParties - List of parties from kommune
        * @param {boolean} skipAnimation - Whether to skip animations
        */
-      function renderPartyList(parties, skipAnimation = false) {
-        // Get container
+      function renderPartyList(parties, kommuneParties, skipAnimation = false) {
+        // Få container
         const partyList = el("partyList");
         partyList.innerHTML = "";
 
-        // Filter and sort parties
-        // ...
+        // Filtrér partier uden stemmer ud
+        let sortedParties = [...parties].filter(
+          (p) => p.votesProcent > 0 || p.votesGiven > 0
+        );
 
-        // Create elements for each party
+        // Sortér partier efter antal stemmer (procent)
+        sortedParties.sort((a, b) => b.votesProcent - a.votesProcent);
+
+        // Begræns antal partier hvis indstilling er sat
+        if (
+          settings.partyLimit > 0 &&
+          sortedParties.length > settings.partyLimit
+        ) {
+          sortedParties = sortedParties.slice(0, settings.partyLimit);
+        }
+
+        // Opret map for kommunepartier til hurtig opslag
+        const kommunePartiesMap = {};
+        if (kommuneParties && kommuneParties.length > 0) {
+          kommuneParties.forEach((party) => {
+            kommunePartiesMap[party.partiLetter || ""] = party;
+          });
+        }
+
+        // Juster tæthed baseret på antal partier der vises
+        const totalParties = sortedParties.length;
+        let densityClass = "density-normal";
+
+        if (totalParties > 10 && totalParties <= 14) {
+          densityClass = "density-medium";
+        } else if (totalParties > 14 && totalParties <= 18) {
+          densityClass = "density-compact";
+        } else if (totalParties > 18) {
+          densityClass = "density-very-compact";
+        }
+
+        // Tilføj tæthedsklasse til container
+        partyList.className = `parti-liste ${densityClass}`;
+
+        // Opret elementer for hvert parti
         sortedParties.forEach((party, index) => {
-          // Create container
+          const letter = (party.partiLetter || "").toUpperCase();
+          const name = party.name || party.shortName || "Ukendt";
+          const percentage =
+            typeof party.votesProcent === "number"
+              ? party.votesProcent.toFixed(1)
+              : "0.0";
+          const color = farve(letter);
+
+          // Opret container for parti
           const partyContainer = document.createElement("div");
           partyContainer.className = "parti";
+          partyContainer.dataset.letter = letter;
 
-          // Skip animation if requested
+          // Spring animation over hvis det er angivet
           if (skipAnimation) {
-            // Set opacity and transform directly instead of animating
             partyContainer.style.opacity = "1";
             partyContainer.style.transform = "translateY(0)";
           } else {
-            // Apply normal animation delay
             partyContainer.style.animationDelay = `${index * 100}ms`;
           }
 
-          // Create party info and other elements
-          // ...
+          // Opret parti info (bogstav og navn)
+          const partyInfo = document.createElement("div");
+          partyInfo.className = "parti-info";
+          partyInfo.innerHTML = `
+            <div class="parti-bogstav" style="background-color: ${color}">${letter}</div>
+            <div class="parti-navn">${name}</div>
+          `;
 
-          // Bar animation handling
+          // Procentvisning
+          const percentageEl = document.createElement("div");
+          percentageEl.className = "parti-procent";
+          percentageEl.textContent = `${percentage}%`;
+
+          // Tilføj sammenligning med kommunen hvis indstillingen er slået til
+          if (settings.compareToMunicipality && kommunePartiesMap[letter]) {
+            const kommuneParty = kommunePartiesMap[letter];
+            const kommunePercentage = kommuneParty.votesProcent || 0;
+            const diff = party.votesProcent - kommunePercentage;
+
+            // Vis kun hvis forskellen er betydningsfuld
+            if (Math.abs(diff) > 0.1) {
+              let comparisonClass = "same";
+              let arrowSymbol = "⟷";
+
+              if (diff > 0.5) {
+                comparisonClass = "higher";
+                arrowSymbol = "↑";
+              } else if (diff < -0.5) {
+                comparisonClass = "lower";
+                arrowSymbol = "↓";
+              }
+              const comparisonEl = document.createElement("span");
+              comparisonEl.className = `comparison-indicator ${comparisonClass}`;
+              comparisonEl.innerHTML = `
+                <span class="comparison-arrow">${arrowSymbol}</span>
+                <span class="comparison-text">${
+                  diff > 0 ? "+" : ""
+                }${diff.toFixed(1)}%</span>
+              `;
+              percentageEl.appendChild(comparisonEl);
+            }
+          }
+
+          // Stemmeantal
+          const votesEl = document.createElement("div");
+          votesEl.className = "parti-stemmer";
+
+          // Vis kun stemmeantal hvis indstillingen er slået til
+          if (settings.showVoteCounts) {
+            const votes = party.votesGiven || 0;
+            votesEl.textContent = `${formatNumber(votes)} stemmer`;
+          }
+
+          // Søjle-container
+          const barContainer = document.createElement("div");
+          barContainer.className = "bar-container";
+
+          // Søjle
           const bar = document.createElement("div");
           bar.className = "bar";
           bar.style.backgroundColor = color;
 
+          // Hvis animation skal springes over, sæt bredden med det samme
           if (skipAnimation) {
-            // Set final width immediately
             bar.style.width = `${Math.min(100, parseFloat(percentage) * 2)}%`;
           } else {
-            // Start at 0 and animate
+            // Start med 0 bredde og animér
             bar.style.width = "0%";
 
-            // Animate after delay
+            // Animér efter kort forsinkelse
             setTimeout(() => {
               bar.style.width = `${Math.min(100, parseFloat(percentage) * 2)}%`;
             }, 100 + index * 50);
           }
 
-          // Add to DOM
-          // ...
+          barContainer.appendChild(bar);
+
+          // Saml alle elementer
+          partyContainer.appendChild(partyInfo);
+          partyContainer.appendChild(percentageEl);
+          partyContainer.appendChild(votesEl);
+          partyContainer.appendChild(barContainer);
+
+          // Tilføj parti til listen
+          partyList.appendChild(partyContainer);
         });
+
+        console.log(
+          `Viser ${totalParties} partier for valgsted ${state.valgstedId}`
+        );
       }
 
       // Initialize when DOM is loaded
