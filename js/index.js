@@ -19,7 +19,7 @@ import StationsTemplate from "./templates/stations-template.js";
 
 // Importér manager klasser
 import DataService from "./kv25-data-service.js";
-import KV25DataService from "./kv25-data-service.js";
+//import KV25DataService from "./kv25-data-service.js";
 import PreviewManager from "./preview-manager.js";
 import ProgramManager from "./program-manager.js";
 import TransitionManager from "./transition-manager.js";
@@ -27,7 +27,7 @@ import TransitionManager from "./transition-manager.js";
 // Re-export alle utilities og modeller
 export {
   // Managers
-  KV25DataService,
+  //KV25DataService,
   DataService,
   PreviewManager,
   ProgramManager,

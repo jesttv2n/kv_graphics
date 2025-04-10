@@ -318,19 +318,17 @@
           el("loadingScreen").style.display = "flex";
 
           // Tjek om KV25DataService er tilgængelig
-          if (!window.kv25DataService) {
+          if (!window.DataService) {
             throw new Error("KV25DataService er ikke tilgængelig");
           }
 
           // Hent både kommune-data, valgsteds-data, og parti-data parallelt
           const [kommuneData, kommuneParties, valgstedData, valgstedParties] =
             await Promise.all([
-              window.kv25DataService.getKommuneData(state.kommuneId),
-              window.kv25DataService.getPartiResultaterForKommune(
-                state.kommuneId
-              ),
-              window.kv25DataService.getValgstedData(state.valgstedId),
-              window.kv25DataService.getPartiResultaterForValgsted(
+              window.DataService.getKommuneData(state.kommuneId),
+              window.DataService.getPartiResultaterForKommune(state.kommuneId),
+              window.DataService.getValgstedData(state.valgstedId),
+              window.DataService.getPartiResultaterForValgsted(
                 state.valgstedId
               ),
             ]);

@@ -330,15 +330,15 @@
           el("loadingScreen").style.display = "flex";
 
           // Tjek om KV25DataService er tilgængelig
-          if (!window.kv25DataService) {
+          if (!window.DataService) {
             throw new Error("KV25DataService er ikke tilgængelig");
           }
 
           // Hent både kommune-data og kandidat-data parallelt
           const [kommuneData, kandidatData] = await Promise.all([
-            window.kv25DataService.getKommuneData(state.kommuneId),
-            window.kv25DataService.getKandidatData(state.kommuneId),
-            window.kv25DataService.getBorgmesterData(),
+            window.DataService.getKommuneData(state.kommuneId),
+            window.DataService.getKandidatData(state.kommuneId),
+            window.DataService.getBorgmesterData(),
           ]);
 
           // Gem data i state

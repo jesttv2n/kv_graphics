@@ -738,7 +738,9 @@ class DataService {
   }
 }
 // Gør KV25DataService tilgængelig globalt
-window.kv25DataService = new KV25DataService();
+//window.kv25DataService = new KV25DataService();
+window.DataService = new DataService();
 
 // Tilføj default export
-export default KV25DataService;
+//export default KV25DataService;
+export default DataService;
