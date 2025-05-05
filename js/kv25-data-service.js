@@ -15,7 +15,7 @@ import {
 class DataService {
   constructor() {
     this.apiBaseUrl = "https://kv25.tv2reg.digital/api/v2";
-    this.VALG_KEY = "kv2021";
+    this.VALG_KEY = "TEST_KV_25";
     this.API_KEY = "openup";
 
     this.cache = {
