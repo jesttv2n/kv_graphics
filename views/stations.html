@@ -131,7 +131,7 @@
     <div id="meta" class="meta"></div>
 
     <!-- Video baggrund -->
-    <div class="video-background">
+    <!--<div class="video-background">
       <div class="video-overlay"></div>
       <video autoplay muted loop playsinline>
         <source
@@ -139,6 +139,11 @@
           type="video/mp4"
         />
       </video>
+    </div>-->
+
+    <!-- Statisk baggrundsbillede -->
+    <div class="image-background">
+      <div class="image-overlay"></div>
     </div>
 
     <div class="visualization-container">
@@ -149,15 +154,17 @@
 
       <div class="visualization-header">
         <div class="header-left">
-          <div class="title-box"><h1>KV25</h1></div>
-          <h2>Valgstedsresultater</h2>
+          <h2 id="valgstedNavn">Valgsted</h2>
+          <h3 id="kommuneNavn" class="subtitle">Kommune</h3>
         </div>
         <div class="header-right">
-          <h2 id="valgstedNavn">Valgsted</h2>
-          <span id="kommuneNavn" class="subtitle">Kommune</span>
+          <img
+            src="../assets/backgrounds/logo.png"
+            alt="Logo"
+            class="header-logo"
+          />
         </div>
       </div>
-
       <div class="visualization-content">
         <div class="info-box">
           <div id="stemmeInfo" class="subtitle">0 stemmer afgivet</div>

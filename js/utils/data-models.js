@@ -257,23 +257,23 @@ function getValgstederForKommune(kommuneId) {
  * Maps party letter/abbreviation to color hex codes
  */
 const partiFarver = {
-  A: "#e4002b", // Socialdemokratiet
-  B: "#0085c7", // Radikale Venstre
-  C: "#00a95c", // Konservative
-  D: "#f58220", // Nye Borgerlige
-  E: "#0085ca", // Klaus Riskær
-  F: "#d71440", // SF
-  G: "#005221", // Veganerpartiet
-  I: "#ffc20e", // Liberal Alliance
-  K: "#004b87", // Kristendemokraterne
+  A: "#E53838", // Socialdemokratiet
+  B: "#78378C", // Radikale Venstre
+  C: "#96B226", // Konservative
+  D: "#127B7F", // Nye Borgerlige
+  F: "#EF75CA", // SF
+  H: "#5FC8B4", // Borgernes Parti
+  I: "#1DB9CE", // Liberal Alliance
+  K: "#8B8474", // Kristendemokraterne
   L: "#2cac2a", // Lokallisterne (generisk)
-  M: "#522d80", // Moderaterne
-  O: "#e3006e", // Dansk Folkeparti
+  M: "#B48CD2", // Moderaterne
+  O: "#EF75CA", // Dansk Folkeparti
   P: "#099d84", // Stram Kurs
-  Q: "#7bc143", // Frie Grønne
-  V: "#1e1e1e", // Venstre
-  Ø: "#c00", // Enhedslisten
-  Å: "#6a0dad", // Alternativet
+  Q: "#5ABE82", // Frie Grønne
+  V: "#205DA5", // Venstre
+  Ø: "#EB7341", // Enhedslisten
+  Å: "#32913C", // Alternativet
+  Æ: "#78A0E1", // Danmarksdemokraterne
 };
 
 // Tilføj lowercase-varianter til partiFarver

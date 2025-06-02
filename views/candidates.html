@@ -154,7 +154,7 @@
     <div id="meta" class="meta"></div>
 
     <!-- Video baggrund -->
-    <div class="video-background">
+    <!--<div class="video-background">
       <div class="video-overlay"></div>
       <video autoplay muted loop playsinline>
         <source
@@ -162,6 +162,11 @@
           type="video/mp4"
         />
       </video>
+    </div>-->
+
+    <!-- Statisk baggrundsbillede -->
+    <div class="image-background">
+      <div class="image-overlay"></div>
     </div>
 
     <div class="visualization-container">
@@ -169,14 +174,17 @@
 
       <div class="visualization-header">
         <div class="header-left">
-          <div class="title-box"><h1>KV21</h1></div>
-          <h2>Valgte Kandidater</h2>
-        </div>
-        <div class="header-right">
           <h2 id="kommuneNavn">Kommune</h2>
           <span id="optaltIndikator" class="optalt-indikator fuldt"
             >100% optalt</span
           >
+        </div>
+        <div class="header-right">
+          <img
+            src="../assets/backgrounds/logo.png"
+            alt="Logo"
+            class="header-logo"
+          />
         </div>
       </div>
 
