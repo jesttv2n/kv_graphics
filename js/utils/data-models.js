@@ -267,7 +267,7 @@ const partiFarver = {
   K: "#8B8474", // Kristendemokraterne
   L: "#2cac2a", // Lokallisterne (generisk)
   M: "#B48CD2", // Moderaterne
-  O: "#EF75CA", // Dansk Folkeparti
+  O: "#f9c659", // Dansk Folkeparti
   P: "#099d84", // Stram Kurs
   Q: "#5ABE82", // Frie Grønne
   V: "#205DA5", // Venstre

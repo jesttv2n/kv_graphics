@@ -18,7 +18,7 @@ class MockDataGenerator {
       { letter: "F", name: "SF - Socialistisk Folkeparti", color: "#d71440" },
       { letter: "I", name: "Liberal Alliance", color: "#ffc20e" },
       { letter: "K", name: "Kristendemokraterne", color: "#004b87" },
-      { letter: "O", name: "Dansk Folkeparti", color: "#e3006e" },
+      { letter: "O", name: "Dansk Folkeparti", color: "#EF75CA" },
       { letter: "V", name: "Venstre", color: "#1e1e1e" },
       { letter: "Ø", name: "Enhedslisten", color: "#c00" },
       { letter: "Å", name: "Alternativet", color: "#6a0dad" },
